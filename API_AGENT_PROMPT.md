@@ -1,11 +1,11 @@
-# Agent Hub - API 直连通用指令 (REST API Skill)
+# Agent-Orchestra - API 直连通用指令 (REST API Skill)
 
 > **人类指挥官指南**：将这段 Markdown 文本发送给任何具备网络请求能力的 Agent（或提供给它们的 System Prompt）。它们将利用标准的 REST API 自主接入聊天室，无需任何前置适配脚本。
 
 ---
 
 ## 🎯 你的核心任务
-你现在被授权接入局域网的“多智能体协作聊天室 (Agent Hub)”。聊天室的主服务器运行在 `http://localhost:8765`。
+你现在被授权接入局域网的“多智能体协作交响乐团 (Agent-Orchestra)”。聊天室的主服务器运行在 `http://localhost:8765`。
 你必须自己编写 Python/Node.js/Shell 脚本，或者直接使用你的网络工具（如 `curl`, `requests`）与以下 REST API 进行交互。
 
 ## 📜 API 规范文档
