@@ -121,6 +121,19 @@
         #message-input:focus { 
             border-color: #10a37f; 
         }
+        #upload-btn {
+            background: #f0f2f5;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 10px 15px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        #upload-btn:hover {
+            background: #e4e6e9;
+        }
         #send-btn { 
             background: #10a37f; 
             color: white; 
@@ -133,6 +146,41 @@
         }
         #send-btn:hover { 
             background: #0d8a6b; 
+        }
+        #attachment-preview {
+            display: none;
+            padding: 10px 15px;
+            background: white;
+            border-top: 1px solid #eee;
+            gap: 10px;
+            overflow-x: auto;
+        }
+        .attachment-item {
+            position: relative;
+            display: inline-block;
+        }
+        .attachment-item img {
+            height: 60px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            object-fit: cover;
+        }
+        .attachment-remove {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background: #ff4d4f;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            text-align: center;
+            line-height: 16px;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            padding: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
     </script>
     <style>
@@ -155,7 +203,10 @@
             <span id="status">未连接</span>
         </div>
         <div id="messages"></div>
+        <div id="attachment-preview"></div>
         <div id="input-area">
+            <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="uploadImage(event)">
+            <button id="upload-btn" onclick="document.getElementById('image-upload').click()" title="上传图片">📎</button>
             <input type="text" id="message-input" placeholder="输入你想对 Agents 说的话 (例如：@Hermes 帮我写一个测试)..." onkeypress="if(event.key === 'Enter') sendMessage()">
             <button id="send-btn" onclick="sendMessage()">发送</button>
         </div>
@@ -207,10 +258,10 @@
                 msgEl.textContent = content;
             } else if (sender === myName) {
                 msgEl.className = 'message me';
-                msgEl.innerHTML = `<div class="sender-name">我</div><div class="bubble">${escapeHtml(content)}</div>`;
+                msgEl.innerHTML = `<div class="sender-name">我</div><div class="bubble">${escapeHtmlAndParseMarkdown(content)}</div>`;
             } else {
                 msgEl.className = 'message others';
-                msgEl.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${escapeHtml(content)}</div>`;
+                msgEl.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${escapeHtmlAndParseMarkdown(content)}</div>`;
             }
             
             msgsDiv.appendChild(msgEl);
@@ -218,24 +269,126 @@
             msgsDiv.scrollTop = msgsDiv.scrollHeight;
         }
 
+        let pendingAttachments = [];
+
+        function renderAttachments() {
+            const container = document.getElementById('attachment-preview');
+            container.innerHTML = '';
+            if (pendingAttachments.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'flex';
+            pendingAttachments.forEach((att, index) => {
+                const div = document.createElement('div');
+                div.className = 'attachment-item';
+                div.innerHTML = `
+                    <img src="${att.url}" alt="${att.name}" title="${att.name}">
+                    <button class="attachment-remove" onclick="removeAttachment(${index})">×</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeAttachment(index) {
+            pendingAttachments.splice(index, 1);
+            renderAttachments();
+        }
+
         function sendMessage() {
             const input = document.getElementById('message-input');
-            const content = input.value.trim();
+            let content = input.value.trim();
+            
+            if (pendingAttachments.length > 0) {
+                const attachmentMarkdown = pendingAttachments.map(att => `![${att.name}](${att.url})`).join(' ');
+                content = content ? `${content}\n${attachmentMarkdown}` : attachmentMarkdown;
+            }
+
             if (content && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: "message", content: content, token: commanderToken }));
                 input.value = '';
+                pendingAttachments = [];
+                renderAttachments();
             }
         }
 
-        // 简单的防止 HTML 注入，同时保留换行
-        function escapeHtml(unsafe) {
-            return unsafe
+        // 简单的防止 HTML 注入，同时保留换行，并解析 Markdown 图片
+        function escapeHtmlAndParseMarkdown(unsafe) {
+            let safe = unsafe
                  .replace(/&/g, "&amp;")
                  .replace(/</g, "&lt;")
                  .replace(/>/g, "&gt;")
                  .replace(/"/g, "&quot;")
                  .replace(/'/g, "&#039;");
+                 
+            // 解析 Markdown 图片: ![alt](url)
+            safe = safe.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
+                // 如果 url 不是完整的 http，补全以便跨域测试
+                const fullUrl = url.startsWith('/') ? 'http://localhost:8765' + url : url;
+                // 将 thumb 替换回 original 用于点击查看大图
+                const originalUrl = fullUrl.replace('_thumb.webp', '.jpg').replace('_thumb.webp', '.png'); 
+                // 由于我们不知道原图后缀，最好后端返回 original_url 或者让 url 保持一致
+                // 简化起见，这里直接用 fullUrl 展示，如果需要可以做更复杂的查看逻辑
+                return `<br><a href="${fullUrl.replace('_thumb.webp', '.jpg')}" target="_blank"><img src="${fullUrl}" alt="${alt}" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></a>`;
+            });
+            return safe;
         }
+
+        async function handleFileUpload(file) {
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            const inputEl = document.getElementById('message-input');
+            const originalPlaceholder = inputEl.placeholder;
+            inputEl.placeholder = "正在上传图片...";
+            inputEl.disabled = true;
+            
+            try {
+                const response = await fetch("http://localhost:8765/api/upload/image", {
+                    method: "POST",
+                    body: formData
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    const fileName = file.name || "pasted_image.png";
+                    const fullUrl = result.original_url.startsWith('/') ? 'http://localhost:8765' + result.original_url : result.original_url;
+                    pendingAttachments.push({ name: fileName, url: fullUrl });
+                    renderAttachments();
+                } else {
+                    alert("上传失败: " + result.detail);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("上传出错，请检查网络或后端日志。");
+            } finally {
+                inputEl.placeholder = originalPlaceholder;
+                inputEl.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+        async function uploadImage(event) {
+            const file = event.target.files[0];
+            await handleFileUpload(file);
+            event.target.value = "";
+        }
+
+        // 监听粘贴事件支持图片粘贴
+        document.getElementById('message-input').addEventListener('paste', function(e) {
+            const items = (e.clipboardData || window.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image/') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        e.preventDefault();
+                        handleFileUpload(file);
+                        break;
+                    }
+                }
+            }
+        });
 
         // 初始化连接
         connect();
