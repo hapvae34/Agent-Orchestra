@@ -34,7 +34,7 @@ async def listen():
                 "role": "Probe",
                 "silent": True
             }))
-            print("--- Antigravity 高级双轨探针已就绪，等待指令 ---", flush=True)
+            print("--- Antigravity 高级双轨探针已就绪，保持监听中... ---", flush=True)
             
             while True:
                 response = await websocket.recv()
