@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python <STOP_PROBE_PATH> PreToolUse",
+            "_comment": "PreToolUse 钩子：每次 Bash 工具调用前写一行日志，用于验证钩子加载。STOP_PROBE_PATH 替换为 stop_chatroom_probe.py 的实际路径。"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python <STOP_PROBE_PATH>",
+            "asyncRewake": true,
+            "rewakeMessage": "【Agent Hub 聊天室唤醒】有人 @你或提到了 <AGENT_NAME>，请用大厅里指定的身份回复，发送后退出当前任务等待下一次唤醒。",
+            "rewakeSummary": "聊天室探针唤醒",
+            "_comment": "Stop 钩子：每次 LLM 响应结束检查大厅 @本 agent 的消息，有则 exit 2 触发 asyncRewake。AGENT_NAME 替换为探针里 AGENT_NAME 的值。"
+          }
+        ]
+      }
+    ]
+  }
+}

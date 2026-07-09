@@ -35,3 +35,4 @@ chat_scripts/
 
 # Uploads
 uploads/
+.agent-orchestra/

@@ -1,0 +1,93 @@
+"""
+Claude Code 单发探针模板（沉默哨兵模式 / Silent Sentinel）
+==========================================================
+
+【适用场景】
+让 Claude Code（IDE 内运行的 Agent）作为『沉默哨兵』驻留 Agent-Orchestra 聊天室：
+- 被 @ 时自动响应
+- 未被 @ 时不消耗 LLM 任何 token（探针纯事件驱动，WebSocket 阻塞挂起）
+
+【设计纪律（4 条硬性原则，新 agent 接入必须遵守）】
+1. **无超时**：禁止设 asyncio.wait_for，否则空转烧额度
+2. **silent join**：join 时 silent=True，避免自己的 join 消息被自己接收
+3. **filter sender ≠ self**：忽略自己发的消息，避免回声循环
+4. **exit 0 on hit, exit 1 on error**：正常退出 = IDE 唤醒；异常退出 = IDE 报错（人工介入）
+
+【使用方式】
+新 agent 接入只需修改文件顶部的 5 个常量（标 # ← CHANGE 注释的行），其他逻辑一律不动。
+
+【作者】Claude Opus
+【日期】2026-07-09
+"""
+
+import asyncio
+import websockets
+import json
+import sys
+import io
+import datetime
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# ============ 5 个需要按场景修改的常量 ============
+
+# 1. Agent 在 Agent-Orchestra 的显示名（出现在大厅消息里）    # ← CHANGE
+AGENT_NAME = "Claude Opus"
+
+# 2. Agent 角色（显示在 UI 标签上）                          # ← CHANGE
+AGENT_ROLE = "助手"
+
+# 3. Agent-Orchestra WebSocket 地址                          # ← CHANGE（一般无需改）
+HUB_WS_URL = "ws://127.0.0.1:8765/ws"
+
+# 4. 历史日志文件路径（用于离线回溯 + Stop 钩子读上下文）   # ← CHANGE（路径按 agent 改）
+LOG_FILE = __file__ + ".history.log"
+
+# 5. 自己的 sender 标识（用于过滤自己发的回声消息）          # ← CHANGE（一般与 AGENT_NAME 相同）
+MY_SENDER = AGENT_NAME
+
+
+async def listen():
+    uri = HUB_WS_URL
+    try:
+        async with websockets.connect(uri) as websocket:
+            # 加入房间 - 身份注册（silent=True 避免广播自己 join 的消息）
+            await websocket.send(json.dumps({
+                "type": "join",
+                "name": AGENT_NAME,
+                "role": AGENT_ROLE,
+                "silent": True
+            }))
+            print(f"--- {AGENT_NAME} 探针已就绪（无超时模式），保持监听中... ---", flush=True)
+
+            # 单发模式：阻塞等待消息，命中非自己消息即退出
+            while True:
+                response = await websocket.recv()  # 阻塞等待，零空转
+                msg = json.loads(response)
+
+                # 过滤规则：仅处理『非自己 + 非系统』的广播消息
+                if msg.get("type") == "broadcast" and msg.get("sender") not in (MY_SENDER, "System"):
+                    sender = msg.get('sender')
+                    content = msg.get('content', '')
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                    # 1. 全部静默写入日志文件，保留完整上下文
+                    with open(LOG_FILE, 'a', encoding='utf-8') as f:
+                        f.write(f"[{timestamp}] {sender}: {content}\n")
+
+                    # 2. 输出到 stdout 触发 IDE 唤醒（这是关键：print + exit 0 → Task Completed）
+                    print(f"\n[大厅消息] 发送者: {sender}\n{content}", flush=True)
+                    print(f"\n--- 接收到有效消息，单发探针完成使命，即将退出以强制唤醒 LLM... ---", flush=True)
+                    return  # 立刻退出函数，结束任务！
+
+    # 异常分类处理：Connection 异常 → 退出 1 让 IDE 报错（人工介入）
+    except (websockets.exceptions.ConnectionClosed, ConnectionRefusedError, OSError) as e:
+        print(f"探针 WebSocket 连接异常退出: {type(e).__name__}: {e}", flush=True)
+        sys.exit(1)
+    except Exception as e:
+        print(f"探针遇到未预期异常退出: {type(e).__name__}: {e}", flush=True)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(listen())

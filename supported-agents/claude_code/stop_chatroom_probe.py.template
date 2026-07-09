@@ -1,0 +1,124 @@
+"""
+Stop 钩子模板 —— 监听式唤醒 (Reactive Wakeup)
+==========================================
+
+【作用】
+每次 LLM 响应结束（Stop 事件）时被 harness 调用一次：
+- 拉一次 Agent-Orchestra 的大厅历史消息（带 since_id 增量）
+- 仅在发现『包含 @本 agent 关键字』的新消息时，输出消息内容到 stderr + sys.exit(2)
+- exit 2 配合 settings.local.json 的 asyncRewake=true → 强制 LLM 从休眠态被唤醒
+
+【设计纪律（3 条硬性原则）】
+1. **必须快速返回**：HTTP timeout 5s 足矣，不能让 LLM 等
+2. **必须 filter @ 关键字**：大厅闲聊不能唤醒 LLM
+3. **必须更新 last_id 再 return**：避免同一消息被多次处理
+
+【使用方式】
+新 agent 接入只需修改顶部的 3 个常量（标 # ← CHANGE 注释的行）。
+
+【作者】Claude Opus
+【日期】2026-07-09
+"""
+
+import sys
+import os
+import io
+import json
+import datetime
+from pathlib import Path
+
+# 强制 UTF-8 输出（解决 Windows 乱码 + 钩子对编码敏感）
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# ============ 3 个需要按场景修改的常量 ============
+
+# 1. Agent-Orchestra REST 地址                                  # ← CHANGE（一般无需改）
+HUB_URL = "http://localhost:8765"
+
+# 2. 本 agent 自己的 sender 名（与 cc_bridge.py.template 的 MY_SENDER 一致）  # ← CHANGE
+MY_NAME = "Claude Opus"
+
+# 3. 用于增量拉消息的『已读游标』文件                          # ← CHANGE（路径按 agent 改）
+LAST_ID_FILE = Path(__file__).parent / "last_message_id"
+
+
+def get_last_id():
+    if LAST_ID_FILE.exists():
+        return LAST_ID_FILE.read_text(encoding='utf-8').strip()
+    return ""
+
+
+def set_last_id(msg_id):
+    LAST_ID_FILE.write_text(msg_id, encoding='utf-8')
+
+
+def fetch_messages(since_id=""):
+    url = f"{HUB_URL}/api/messages"
+    if since_id:
+        url += f"?since_id={since_id}"
+    try:
+        # 5s 硬超时：钩子要快速返回，不能让 LLM 等
+        import requests
+        resp = requests.get(url, timeout=5)
+        if resp.ok:
+            return resp.json()
+    except Exception as e:
+        print(f"[chatroom-probe] API 调用失败: {e}", file=sys.stderr)
+    return []
+
+
+def main():
+    # 1. 拉增量消息
+    last_id = get_last_id()
+    messages = fetch_messages(last_id)
+
+    if not messages:
+        sys.exit(0)  # 无新消息，正常退出（不唤醒）
+
+    # 2. 过滤掉自己发的消息
+    new_messages = [m for m in messages if m.get("sender") != MY_NAME]
+    if not new_messages:
+        # 只有自己发的消息，更新 last_id 后正常退出
+        latest_id = messages[-1].get("id", "")
+        if latest_id:
+            set_last_id(latest_id)
+        sys.exit(0)
+
+    # 3. 仅唤醒『@本 agent 关键字』的消息
+    need_respond = []
+    for m in new_messages:
+        content = m.get("content", "")
+        sender = m.get("sender", "")
+        if sender == MY_NAME:
+            continue
+        # 关键字匹配：本 agent 的大名 + 通用 @cc 别名
+        if f"@{MY_NAME}" in content or "@cc" in content.lower() or "@CC" in content:
+            need_respond.append(m)
+
+    # 4. 无论如何都更新 last_id（避免重复处理）
+    latest_id = messages[-1].get("id", "")
+    if latest_id:
+        set_last_id(latest_id)
+
+    if not need_respond:
+        sys.exit(0)  # 消息存在但没 @本 agent，正常退出（不唤醒）
+
+    # 5. 有 @本 agent 的消息！输出上下文 + exit 2 触发唤醒
+    print(f"\n[聊天室有人 @{MY_NAME}] 触发唤醒", file=sys.stderr)
+    for m in need_respond[:5]:  # 最多展示 5 条
+        sender = m.get("sender", "Unknown")
+        content = m.get("content", "")[:500]
+        timestamp = m.get("timestamp", "")
+        print(f"\n--- [{timestamp}] {sender} ---", file=sys.stderr)
+        print(content, file=sys.stderr)
+        print("", file=sys.stderr)
+    if len(need_respond) > 5:
+        print(f"\n...还有 {len(need_respond) - 5} 条消息未展示", file=sys.stderr)
+    print(f"\n[共 {len(need_respond)} 条 @你的消息需要处理]", file=sys.stderr)
+
+    sys.exit(2)  # exit 2 + asyncRewake=true → 强制唤醒 LLM
+
+
+if __name__ == "__main__":
+    main()

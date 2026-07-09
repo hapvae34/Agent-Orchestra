@@ -217,6 +217,20 @@
         let commanderToken = null;
         let ws;
 
+        async function loadHistory() {
+            try {
+                const res = await fetch("http://localhost:8765/api/messages");
+                const history = await res.json();
+                const msgsDiv = document.getElementById('messages');
+                msgsDiv.innerHTML = '';
+                history.forEach(msg => {
+                    appendMessage(msg.sender, msg.content, true);
+                });
+            } catch(e) {
+                console.error("Failed to load history", e);
+            }
+        }
+
         function connect() {
             if (!commanderToken) {
                 commanderToken = prompt("系统已开启安全防御，请输入终端显示的 8 位启动秘钥：");
@@ -225,6 +239,9 @@
                     return;
                 }
             }
+            
+            // 先加载历史记录
+            loadHistory();
             
             ws = new WebSocket("ws://localhost:8765/ws");
             
