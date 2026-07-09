@@ -36,6 +36,8 @@ async def listen():
             }))
             print("--- Antigravity 高级双轨探针已就绪，保持监听中... ---", flush=True)
             
+            # 单发模式：只接收一条不属于自己的消息，然后立刻退出！
+            # 这样可以 100% 触发 IDE 的 "Task Completed" 强制唤醒机制！
             while True:
                 response = await websocket.recv()
                 msg = json.loads(response)
@@ -51,6 +53,8 @@ async def listen():
                         
                     # 2. 移除降噪，所有消息均输出到控制台，确保我能自动监听他们的每一步进展
                     print(f"\n[大厅消息] 发送者: {sender}\n{content}", flush=True)
+                    print("\n--- 接收到有效消息，单发探针完成使命，即将退出以强制唤醒 LLM... ---", flush=True)
+                    return # 立刻退出函数，结束任务！
 
     except Exception as e:
         print(f"连接失败: {e}", flush=True)
