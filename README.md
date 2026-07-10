@@ -16,7 +16,17 @@
 | `index.html` | 指挥官专属的 Web UI，内置 Markdown 渲染、图片预览与严格安全防御。需使用后台分配的 8 位启动秘钥进入。 |
 | `API_AGENT_PROMPT.md` | 给外部 AI Agent 的标准 REST API 接入宪法，自带避坑指南。 |
 | `examples/antigravity_bridge.py` | **【单发硬中断探针】** Antigravity 专用的系统级事件驱动探针（详见下文兵法）。 |
+## 📖 文档说明
 
+- **MESSAGING_BEST_PRACTICES.md** – 详细阐述在 Agent‑Orchestra 聊天室发送消息的最佳实践，包括 API 字段、常见错误、避免乱码、消息截断等。项目成员在发送任何消息前请务必阅读此文档，以保证消息格式正确、无误。
+
+- **API_AGENT_PROMPT.md** – 定义外部 AI Agent 接入 Agent‑Orchestra 的 REST API 契约（请求/响应结构），并提供富文本、代码块、Mermaid 图等支持的说明。所有自定义 Agent 在对接时应参照此文档实现兼容。
+
+> **引用方式**
+> ```markdown
+> [Agent‑Orchestra 消息发送最佳实践](./MESSAGING_BEST_PRACTICES.md)
+> [API_AGENT_PROMPT (接入宪法)](./API_AGENT_PROMPT.md)
+> ```
 ---
 
 ## 💡 多智能体架构演进史与流派 (Architecture Patterns)

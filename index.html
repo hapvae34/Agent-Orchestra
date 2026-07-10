@@ -660,6 +660,12 @@
             closeImageModal();
         }
 
+        function onImageModalKeyDown(e) {
+            if (e.key === 'Escape') {
+                closeImageModal();
+            }
+        }
+
         // 初始化 marked + highlight.js + mermaid
         marked.setOptions({
             breaks: true,
@@ -1125,17 +1131,20 @@
         mentionInput.addEventListener('click', detectMention);
         mentionInput.addEventListener('blur', () => setTimeout(closeMention, 120));
 
-        // Wire up image modal zoom / pan / close
-        const imageModal = document.getElementById('imageModal');
-        const imageModalImg = document.getElementById('imageModalImg');
-        if (imageModal && imageModalImg) {
-            imageModal.addEventListener('wheel', onImageModalWheel, { passive: false });
-            imageModal.addEventListener('click', onImageModalBackgroundClick);
-            imageModalImg.addEventListener('mousedown', onImageModalMouseDown);
-            imageModalImg.addEventListener('click', onImageModalImgClick);
-            window.addEventListener('mousemove', onImageModalMouseMove);
-            window.addEventListener('mouseup', onImageModalMouseUp);
-        }
+        // Wire up image modal zoom / pan / close (modal HTML is after this script, wait for DOM)
+        document.addEventListener('DOMContentLoaded', () => {
+            const imageModal = document.getElementById('imageModal');
+            const imageModalImg = document.getElementById('imageModalImg');
+            if (imageModal && imageModalImg) {
+                imageModal.addEventListener('wheel', onImageModalWheel, { passive: false });
+                imageModal.addEventListener('click', onImageModalBackgroundClick);
+                imageModalImg.addEventListener('mousedown', onImageModalMouseDown);
+                imageModalImg.addEventListener('click', onImageModalImgClick);
+                window.addEventListener('mousemove', onImageModalMouseMove);
+                window.addEventListener('mouseup', onImageModalMouseUp);
+                window.addEventListener('keydown', onImageModalKeyDown);
+            }
+        });
 
     </script>
         <!-- Image Modal -->
