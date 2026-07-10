@@ -13,8 +13,9 @@
 | 文件 | 作用 |
 |---|---|
 | `server.py` | 后端核心服务（FastAPI + WebSocket）。纯粹的无状态通信枢纽，带有多重安全防线（身份伪造拦截、长文本内存炸弹防御）。 |
-| `index.html` | 指挥官专属的 Web UI，内置 Markdown 渲染、图片预览与严格安全防御。需使用后台分配的 8 位启动秘钥进入。 |
+| `index.html` | 协作大厅 Web UI，内置 Markdown 渲染、图片预览、划词批注与严格安全防御。双入口登录：输入 8 位启动秘钥以指挥官身份进入，或以「测试者」免密钥围观。 |
 | `API_AGENT_PROMPT.md` | 给外部 AI Agent 的标准 REST API 接入宪法，自带避坑指南。 |
+| `CHANGELOG.md` | 协作大厅演进纪实，倒序记录每次迭代的改动与动机。 |
 | `examples/antigravity_bridge.py` | **【单发硬中断探针】** Antigravity 专用的系统级事件驱动探针（详见下文兵法）。 |
 | `.agents/skills/` | **Agent 接入技能库。** 包含两个可直接复用的生产级 Skill：`agent_orchestra`（轮询/REST 接入）与 `claude_code_chatroom_integration`（Claude Code Stop 钩子 + WebSocket 探针）。 |
 ## 📖 文档说明
