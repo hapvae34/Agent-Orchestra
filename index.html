@@ -230,6 +230,58 @@
             padding: 0;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
+        /* ---- UI ENHANCEMENTS ---- */
+        .copy-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+            color: #ddd;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        pre { position: relative; }
+        pre:hover .copy-btn { opacity: 1; }
+        .copy-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            cursor: zoom-out;
+            overflow: hidden;
+        }
+        .image-modal img {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            max-width: 90%;
+            max-height: 90%;
+            transform: translate(calc(-50% + 0px), calc(-50% + 0px)) scale(1);
+            transform-origin: center;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        .image-modal img:active {
+            cursor: grabbing;
+        }
+        .bubble img {
+            cursor: zoom-in;
+            transition: transform 0.2s;
+        }
+        .bubble img:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script><script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/java.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/xml.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/sql.min.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css"><script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script><style>.hljs {
             background: transparent;
@@ -502,6 +554,112 @@
         let ws;
         let mermaidInitialized = false;
 
+        // === Image modal zoom / pan state ===
+        const imageModalState = {
+            scale: 1,
+            panX: 0,
+            panY: 0,
+            isDragging: false,
+            dragStartX: 0,
+            dragStartY: 0,
+            dragStartPanX: 0,
+            dragStartPanY: 0,
+            hasDragged: false
+        };
+        const IMAGE_MIN_ZOOM = 0.5;
+        const IMAGE_MAX_ZOOM = 5;
+        const IMAGE_ZOOM_SENSITIVITY = 0.001;
+
+        function updateImageModalTransform() {
+            const img = document.getElementById('imageModalImg');
+            if (!img) return;
+            img.style.transform =
+                `translate(calc(-50% + ${imageModalState.panX}px), calc(-50% + ${imageModalState.panY}px)) scale(${imageModalState.scale})`;
+        }
+
+        function resetImageModalState() {
+            imageModalState.scale = 1;
+            imageModalState.panX = 0;
+            imageModalState.panY = 0;
+            imageModalState.isDragging = false;
+            imageModalState.hasDragged = false;
+            updateImageModalTransform();
+        }
+
+        function openImageModal(src) {
+            const modal = document.getElementById('imageModal');
+            const img = document.getElementById('imageModalImg');
+            if (!modal || !img) return;
+            resetImageModalState();
+            img.src = src;
+            modal.style.display = 'block';
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            if (!modal) return;
+            modal.style.display = 'none';
+            resetImageModalState();
+        }
+
+        function onImageModalWheel(e) {
+            e.preventDefault();
+            const modal = document.getElementById('imageModal');
+            const s1 = imageModalState.scale;
+            const delta = -e.deltaY * IMAGE_ZOOM_SENSITIVITY;
+            const s2 = Math.min(IMAGE_MAX_ZOOM, Math.max(IMAGE_MIN_ZOOM, s1 * (1 + delta)));
+            if (s2 === s1) return;
+
+            const ratio = s2 / s1;
+            const vcx = modal.clientWidth / 2;
+            const vcy = modal.clientHeight / 2;
+
+            // Zoom toward cursor: keep the point under the mouse stationary.
+            imageModalState.panX = imageModalState.panX * ratio + (e.clientX - vcx) * (1 - ratio);
+            imageModalState.panY = imageModalState.panY * ratio + (e.clientY - vcy) * (1 - ratio);
+            imageModalState.scale = s2;
+            updateImageModalTransform();
+        }
+
+        function onImageModalMouseDown(e) {
+            e.preventDefault();
+            imageModalState.isDragging = true;
+            imageModalState.hasDragged = false;
+            imageModalState.dragStartX = e.clientX;
+            imageModalState.dragStartY = e.clientY;
+            imageModalState.dragStartPanX = imageModalState.panX;
+            imageModalState.dragStartPanY = imageModalState.panY;
+        }
+
+        function onImageModalMouseMove(e) {
+            if (!imageModalState.isDragging) return;
+            const dx = e.clientX - imageModalState.dragStartX;
+            const dy = e.clientY - imageModalState.dragStartY;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                imageModalState.hasDragged = true;
+            }
+            imageModalState.panX = imageModalState.dragStartPanX + dx;
+            imageModalState.panY = imageModalState.dragStartPanY + dy;
+            updateImageModalTransform();
+        }
+
+        function onImageModalMouseUp() {
+            imageModalState.isDragging = false;
+        }
+
+        function onImageModalImgClick(e) {
+            e.stopPropagation();
+        }
+
+        function onImageModalBackgroundClick(e) {
+            if (e.target !== e.currentTarget) return;
+            if (imageModalState.hasDragged) {
+                imageModalState.hasDragged = false;
+                return;
+            }
+            closeImageModal();
+        }
+
         // 初始化 marked + highlight.js + mermaid
         marked.setOptions({
             breaks: true,
@@ -603,6 +761,30 @@
 
             msgsDiv.appendChild(msgEl);
             msgsDiv.scrollTop = msgsDiv.scrollHeight;
+
+            // ---- NEW UI FEATURES ----
+            msgEl.querySelectorAll('pre').forEach(pre => {
+                if (pre.querySelector('.copy-btn')) return;
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerHTML = '📋';
+                btn.title = '一键复制';
+                btn.onclick = () => {
+                    const code = pre.querySelector('code');
+                    if (code) {
+                        navigator.clipboard.writeText(code.innerText).then(() => {
+                            btn.innerHTML = '✅';
+                            setTimeout(() => { btn.innerHTML = '📋'; }, 2000);
+                        });
+                    }
+                };
+                pre.appendChild(btn);
+            });
+
+            msgEl.querySelectorAll('img').forEach(img => {
+                img.onclick = () => openImageModal(img.src);
+            });
+            // --------------------------
         }
 
         // Markdown 渲染：marked → DOMPurify 防 XSS
@@ -943,7 +1125,23 @@
         mentionInput.addEventListener('click', detectMention);
         mentionInput.addEventListener('blur', () => setTimeout(closeMention, 120));
 
+        // Wire up image modal zoom / pan / close
+        const imageModal = document.getElementById('imageModal');
+        const imageModalImg = document.getElementById('imageModalImg');
+        if (imageModal && imageModalImg) {
+            imageModal.addEventListener('wheel', onImageModalWheel, { passive: false });
+            imageModal.addEventListener('click', onImageModalBackgroundClick);
+            imageModalImg.addEventListener('mousedown', onImageModalMouseDown);
+            imageModalImg.addEventListener('click', onImageModalImgClick);
+            window.addEventListener('mousemove', onImageModalMouseMove);
+            window.addEventListener('mouseup', onImageModalMouseUp);
+        }
+
     </script>
-</body>
+        <!-- Image Modal -->
+        <div id="imageModal" class="image-modal">
+            <img id="imageModalImg" src="" draggable="false" />
+        </div>
+    </body>
 
 </html>
