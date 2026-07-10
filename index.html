@@ -6,38 +6,46 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent-Orchestra - 实时协作交响乐团</title>
     <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 彻底禁止页面级滚动 */
+            background-color: #f0f2f5;
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #f0f2f5;
-            margin: 0;
-            padding: 20px;
             display: flex;
             justify-content: center;
-            height: 100vh;
             box-sizing: border-box;
+            padding: 20px;
         }
 
         #chat-container {
             width: 100%;
             max-width: 900px;
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            height: 100%;
+            border: 1px solid rgba(0,0,0,0.04);
         }
 
         #chat-header {
-            background: #10a37f;
-            /* ChatGPT 风格绿 */
+            background: linear-gradient(135deg, #10a37f, #028090);
             color: white;
-            padding: 15px 20px;
-            font-weight: bold;
+            padding: 18px 24px;
+            font-weight: 600;
             font-size: 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            z-index: 10;
         }
 
         #status {
@@ -53,12 +61,13 @@
 
         #messages {
             flex: 1;
-            padding: 20px;
+            padding: 24px 20px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            background: #fafafa;
+            gap: 20px;
+            background: #fcfcfc;
+            scroll-behavior: smooth;
         }
 
         .message {
@@ -97,13 +106,17 @@
         }
 
         .bubble {
-            padding: 12px 16px;
-            border-radius: 12px;
-            font-size: 14px;
+            padding: 14px 18px;
+            border-radius: 16px;
+            font-size: 14.5px;
             line-height: 1.6;
             word-wrap: break-word;
             white-space: normal;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease;
+        }
+        .bubble:hover {
+            transform: translateY(-1px);
         }
         /* 重置 Markdown 块级元素在气泡里的默认 margin，避免单行消息被撑成两行 */
         .bubble p,
@@ -135,61 +148,111 @@
         }
 
         .message.me .bubble {
-            background: #10a37f;
+            background: linear-gradient(135deg, #10a37f, #14b890);
             color: white;
             border-top-right-radius: 4px;
+            box-shadow: 0 4px 10px rgba(16, 163, 127, 0.15);
         }
 
         #input-area {
-            padding: 15px;
-            border-top: 1px solid #eee;
+            padding: 16px 20px;
+            border-top: 1px solid rgba(0,0,0,0.03);
             display: flex;
-            gap: 10px;
+            flex-direction: column;
             background: white;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.02);
+            z-index: 10;
+            position: relative; /* 为 @ 补全弹窗提供定位基准 */
+        }
+        .input-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            width: 100%;
         }
 
         #message-input {
             flex: 1;
-            padding: 12px 15px;
-            border: 1px solid #ccc;
+            padding: 14px 18px;
+            border: 1px solid transparent;
+            background: #f4f6f8;
             border-radius: 24px;
             outline: none;
-            font-size: 14px;
-            transition: border-color 0.2s;
+            font-size: 15px;
+            line-height: 1.5;
+            min-height: 52px;
+            box-sizing: border-box;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            resize: none;
         }
 
         #message-input:focus {
+            background: white;
             border-color: #10a37f;
+            box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.15);
+        }
+
+        #message-input::placeholder {
+            color: #9aa0a6;
+            font-size: 14px;
+        }
+
+        .input-hint {
+            margin-top: 8px;
+            padding-right: 6px;
+            font-size: 11.5px;
+            color: #b0b6bd;
+            text-align: right;
+            user-select: none;
         }
 
         #upload-btn {
             background: #f0f2f5;
-            color: #333;
-            border: 1px solid #ccc;
-            padding: 10px 15px;
-            border-radius: 24px;
+            color: #555;
+            border: none;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            font-size: 16px;
-            transition: background 0.2s;
+            font-size: 18px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         #upload-btn:hover {
             background: #e4e6e9;
+            color: #333;
+            transform: scale(1.05);
+        }
+        #upload-btn:active {
+            transform: scale(0.95);
         }
 
         #send-btn {
-            background: #10a37f;
+            background: linear-gradient(135deg, #10a37f, #0d8a6b);
             color: white;
             border: none;
-            padding: 10px 24px;
+            padding: 0 26px;
+            height: 46px;
             border-radius: 24px;
             cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 12px rgba(16, 163, 127, 0.25);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         #send-btn:hover {
-            background: #0d8a6b;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(16, 163, 127, 0.35);
+        }
+        #send-btn:active {
+            transform: translateY(1px) scale(0.96);
+            box-shadow: 0 2px 8px rgba(16, 163, 127, 0.2);
         }
 
         #attachment-preview {
@@ -473,7 +536,7 @@
             left: 60px;
             bottom: calc(100% + 4px);
             min-width: 200px;
-            max-height: 220px;
+            max-height: 250px;
             overflow-y: auto;
             background: #fff;
             border: 1px solid #e0e3e7;
@@ -523,10 +586,297 @@
         .mention-item:hover {
             background: #eef5f2;
         }
+
+        /* ===== 选中文本提问悬浮窗 ===== */
+        /* 批注期间保持框选原文的持久高亮（Custom Highlight API，不改动 DOM） */
+        ::highlight(quote-active) {
+            background-color: rgba(255, 205, 65, 0.55);
+            color: inherit;
+        }
+        .quote-panel {
+            display: none;
+            position: fixed;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            border-radius: 12px;
+            padding: 10px 14px;
+            z-index: 2000;
+            width: 280px;
+            flex-direction: column;
+            gap: 6px;
+            opacity: 0;
+            transform: translateY(10px) scale(0.95);
+            transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .quote-panel.show {
+            display: flex;
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .quote-panel-header {
+            font-size: 11px;
+            color: #6b7280;
+            font-weight: 500;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+        }
+        .quote-panel-header .icon {
+            margin-right: 4px;
+            font-size: 12px;
+        }
+        .quote-panel-body {
+            display: flex;
+            flex-direction: row;
+            align-items: flex-end;
+            gap: 8px;
+            width: 100%;
+        }
+        .quote-panel textarea {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 13.5px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            color: #1f2937;
+            max-height: 120px;
+            padding: 2px 0;
+            font-family: inherit;
+        }
+        #quote-question-input::placeholder {
+            color: #999;
+        }
+        .quote-panel-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+        }
+        #quote-submit-btn, #quote-cancel-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: transparent;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        #quote-submit-btn {
+            background: linear-gradient(135deg, #10a37f, #0d8a6b);
+            color: white;
+            box-shadow: 0 2px 6px rgba(16,163,127,0.3);
+        }
+        #quote-submit-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 10px rgba(16,163,127,0.4);
+        }
+        #quote-cancel-btn {
+            color: #888;
+        }
+        #quote-cancel-btn:hover {
+            background: rgba(0,0,0,0.06);
+            color: #555;
+        }
+
+        /* ===== 草稿卡片区 ===== */
+        #quote-preview {
+            display: none;
+            max-height: 180px;
+            overflow-y: auto;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding: 0 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .quote-item {
+            position: relative;
+            background: white;
+            border: 1px solid #eef0f2;
+            border-left: 4px solid #10a37f;
+            border-radius: 8px;
+            padding: 10px 32px 10px 14px;
+            font-size: 13.5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            animation: slideIn 0.2s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .quote-text {
+            color: #777;
+            margin-bottom: 6px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-style: italic;
+            font-size: 12.5px;
+        }
+        .quote-annotation {
+            color: #222;
+            font-weight: 500;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .quote-author {
+            color: #10a37f;
+            font-weight: 600;
+            font-size: 11px;
+            margin-bottom: 3px;
+        }
+        .quote-remove {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            color: #b0b6bd;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .quote-remove:hover {
+            color: #ff4d4f;
+            background: #fff1f0;
+        }
+
+        /* ===== 移动端适配 ===== */
+        @media (max-width: 768px) {
+            body {
+                padding: 0;
+            }
+            #chat-container {
+                border-radius: 0;
+                box-shadow: none;
+                border: none;
+            }
+            #chat-header {
+                padding: 14px 18px;
+                font-size: 16px;
+            }
+            #messages {
+                padding: 16px 14px;
+            }
+            #input-area {
+                padding: 12px 14px;
+                /* iPhone 底部安全区适配 */
+                padding-bottom: max(12px, env(safe-area-inset-bottom));
+            }
+            #send-btn {
+                padding: 0 20px;
+            }
+            .bubble {
+                padding: 12px 16px;
+                font-size: 14px;
+            }
+        }
+        /* ===== 登录弹窗 ===== */
+        #login-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            z-index: 5000;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 28px 26px;
+            width: 340px;
+            max-width: calc(100vw - 40px);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            text-align: center;
+        }
+        .login-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 8px;
+        }
+        .login-sub {
+            font-size: 12.5px;
+            color: #6b7280;
+            line-height: 1.5;
+            margin-bottom: 18px;
+        }
+        #login-token-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 11px 14px;
+            font-size: 15px;
+            letter-spacing: 3px;
+            text-align: center;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        #login-token-input:focus {
+            border-color: #10a37f;
+        }
+        .login-error {
+            color: #ef4444;
+            font-size: 12px;
+            min-height: 16px;
+            margin: 8px 0 4px;
+        }
+        .login-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 6px;
+        }
+        .login-btn-primary {
+            padding: 11px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+            background: #10a37f;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .login-btn-primary:hover {
+            background: #0e8f6f;
+        }
+        .login-btn-ghost {
+            padding: 11px;
+            font-size: 13.5px;
+            font-weight: 500;
+            color: #10a37f;
+            background: #f0fdf9;
+            border: 1px solid #a7f3d0;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .login-btn-ghost:hover {
+            background: #dcfce7;
+        }
     </style>
 </head>
 
-<body>
     <div id="chat-container">
         <div id="chat-header">
             <span>🎻 Agent-Orchestra 协作大厅</span>
@@ -540,19 +890,61 @@
         <div id="attachment-preview"></div>
         <div id="input-area">
             <div id="mention-popup"></div>
-            <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="uploadImage(event)">
-            <button id="upload-btn" onclick="document.getElementById('image-upload').click()" title="上传图片">📎</button>
-            <textarea id="message-input"
-                placeholder="输入你想对 Agents 说的话 (例如：@Hui 帮我写一个测试)...&#10;Enter 发送 / Shift+Enter 换行" rows="1"></textarea>
-            <button id="send-btn" onclick="sendMessage()">发送</button>
+            <div id="quote-preview"></div>
+            <div class="input-row">
+                <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="uploadImage(event)">
+                <button id="upload-btn" onclick="document.getElementById('image-upload').click()" title="上传图片">📎</button>
+                <textarea id="message-input"
+                    placeholder="例如：@队长 统筹分工、阶段验收并组织评审，@cc 负责开发，@pi 负责测试，都听队长安排" rows="2"></textarea>
+                <button id="send-btn" onclick="sendMessage()">发送</button>
+            </div>
+            <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>
+        </div>
+    </div>
+
+    <!-- 登录弹窗：指挥官(需秘钥) / 测试者(免密钥围观) 双入口 -->
+    <div id="login-modal">
+        <div class="login-card">
+            <div class="login-title">🎻 进入 Agent-Orchestra 协作大厅</div>
+            <div class="login-sub">输入终端显示的 8 位秘钥以指挥官身份登录，或以测试身份围观</div>
+            <input type="password" id="login-token-input" maxlength="8" placeholder="8 位启动秘钥"
+                   autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();enterAsCommander();}">
+            <div id="login-error" class="login-error"></div>
+            <div class="login-actions">
+                <button id="login-enter-btn" class="login-btn-primary" onclick="enterAsCommander()">进入</button>
+                <button id="login-tester-btn" class="login-btn-ghost" onclick="enterAsTester()">以测试身份进入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quote-question floating panel -->
+    <div id="quote-panel" class="quote-panel">
+        <div class="quote-panel-header">
+            <span class="icon">💬</span><span id="quote-panel-target">对 未知 批注</span>
+        </div>
+        <div class="quote-panel-body">
+            <textarea id="quote-question-input" rows="1" placeholder="输入批注 (Enter 保存, Esc 取消)"></textarea>
+            <div class="quote-panel-actions">
+                <button id="quote-submit-btn" title="保存批注">↑</button>
+                <button id="quote-cancel-btn" title="取消">×</button>
+            </div>
         </div>
     </div>
 
     <script>
-        const myName = "人类指挥官";
+        const COMMANDER_NAME = "人类指挥官";
+        const TESTER_NAME = "测试者";
+        let myName = COMMANDER_NAME;   // 登录后可能被设为「测试者」
+        let isTester = false;          // 测试者围观模式：免密钥、身份锁定、无特权
         let commanderToken = null;
         let ws;
         let mermaidInitialized = false;
+        let pendingQuotes = [];
+        
+        const isFileProtocol = window.location.protocol === 'file:';
+        const baseUrl = isFileProtocol ? 'http://localhost:8765' : window.location.origin;
+        const wsUrl = isFileProtocol ? 'ws://localhost:8765/ws' : 
+            (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
 
         // === Image modal zoom / pan state ===
         const imageModalState = {
@@ -587,6 +979,7 @@
         }
 
         function openImageModal(src) {
+            closeQuotePanel();
             const modal = document.getElementById('imageModal');
             const img = document.getElementById('imageModalImg');
             if (!modal || !img) return;
@@ -697,39 +1090,90 @@
             mermaidInitialized = true;
         }
 
+        function scrollMessagesToBottom() {
+            const msgsDiv = document.getElementById('messages');
+            if (msgsDiv) msgsDiv.scrollTop = msgsDiv.scrollHeight;
+        }
+
         async function loadHistory() {
             try {
-                const res = await fetch("http://localhost:8765/api/messages");
+                const res = await fetch(`${baseUrl}/api/messages`);
                 const history = await res.json();
                 const msgsDiv = document.getElementById('messages');
                 msgsDiv.innerHTML = '';
                 history.forEach(msg => {
                     appendMessage(msg.sender, msg.content, true);
                 });
-                renderMermaidDiagrams();
+                scrollMessagesToBottom();
+                // 历史里的图片是异步加载的：设置 scrollTop 那一刻图片高度还是 0，
+                // 待其加载完成撑高文档，就会把视口顶离底部、停在倒数几句。
+                // 逐张图片 load/error 后重新贴底修正。
+                msgsDiv.querySelectorAll('img').forEach(img => {
+                    if (!img.complete) {
+                        img.addEventListener('load', scrollMessagesToBottom, { once: true });
+                        img.addEventListener('error', scrollMessagesToBottom, { once: true });
+                    }
+                });
+                // mermaid 图表同样异步渲染撑高，渲染完再贴底一次
+                await renderMermaidDiagrams();
+                scrollMessagesToBottom();
             } catch (e) {
                 console.error("Failed to load history", e);
             }
         }
 
-        function connect() {
-            if (!commanderToken) {
-                commanderToken = prompt("系统已开启安全防御，请输入终端显示的 8 位启动秘钥：");
-                if (!commanderToken) {
-                    document.getElementById('status').textContent = '未授权，无法连接';
-                    return;
-                }
+        // ===== 登录：指挥官(需PIN) / 测试者(免密钥围观) 双入口 =====
+        function showLogin() {
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.style.display = 'flex';
+            const err = document.getElementById('login-error');
+            if (err) err.textContent = '';
+            const inp = document.getElementById('login-token-input');
+            if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+        }
+
+        function hideLogin() {
+            const modal = document.getElementById('login-modal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function enterAsCommander() {
+            const inp = document.getElementById('login-token-input');
+            const pin = (inp.value || '').trim();
+            if (!pin) {
+                document.getElementById('login-error').textContent = '请输入 8 位启动秘钥';
+                inp.focus();
+                return;
             }
+            isTester = false;
+            myName = COMMANDER_NAME;
+            commanderToken = pin;
+            hideLogin();
+            connect();
+        }
 
-            loadHistory();
+        function enterAsTester() {
+            isTester = true;
+            myName = TESTER_NAME;   // 身份锁定为「测试者」，不可更改
+            commanderToken = null;  // 免密钥
+            hideLogin();
+            connect();
+        }
 
-            ws = new WebSocket("ws://localhost:8765/ws");
+        function connect() {
+            ws = new WebSocket(wsUrl);
 
             ws.onopen = () => {
-                document.getElementById('status').textContent = '已连接 Hub';
+                document.getElementById('status').textContent = isTester ? '已连接 Hub · 测试者' : '已连接 Hub';
                 document.getElementById('status').className = 'connected';
-                ws.send(JSON.stringify({ type: "join", name: myName, role: "User", token: commanderToken }));
+                ws.send(JSON.stringify({
+                    type: "join",
+                    name: myName,
+                    role: isTester ? "测试者" : "User",
+                    token: commanderToken
+                }));
                 loadPresence();
+                loadHistory(); // <-- 修复：连接成功后拉取历史记录
             };
 
             ws.onmessage = (event) => {
@@ -743,7 +1187,17 @@
                 }
             };
 
-            ws.onclose = () => {
+            ws.onclose = (event) => {
+                if (event.code === 1008) {
+                    // 秘钥错误被服务器拒绝：清除并重新弹登录框
+                    commanderToken = null;
+                    document.getElementById('status').textContent = '秘钥无效，请重新登录';
+                    document.getElementById('status').className = '';
+                    showLogin();
+                    const err = document.getElementById('login-error');
+                    if (err) err.textContent = '秘钥错误，请重新输入或以测试身份进入';
+                    return;
+                }
                 document.getElementById('status').textContent = '已断开，正在重连...';
                 document.getElementById('status').className = '';
                 setTimeout(connect, 3000);
@@ -862,6 +1316,14 @@
             const input = document.getElementById('message-input');
             let content = input.value.trim();
 
+            if (pendingQuotes.length > 0) {
+                const quotesMarkdown = pendingQuotes.map(q => {
+                    const head = (q.author && q.author !== '未知') ? `> ❝ 来自 ${q.author}` : `> ❝`;
+                    return `${head}\n${q.quoted}\n> \n> **批注**：${q.annotation}`;
+                }).join('\n\n');
+                content = content ? `${quotesMarkdown}\n\n${content}` : quotesMarkdown;
+            }
+
             if (pendingAttachments.length > 0) {
                 // 消息里用 originalUrl（点击可看大图），本地预览用 thumbUrl（不撑大气泡）
                 const attachmentMarkdown = pendingAttachments.map(att => `![${att.name}](${att.originalUrl})`).join(' ');
@@ -874,6 +1336,8 @@
                 autoResize();
                 pendingAttachments = [];
                 renderAttachments();
+                pendingQuotes = [];
+                renderQuotes();
             }
         }
 
@@ -896,7 +1360,7 @@
             inputEl.disabled = true;
 
             try {
-                const response = await fetch("http://localhost:8765/api/upload/image", {
+                const response = await fetch(`${baseUrl}/api/upload/image`, {
                     method: "POST",
                     body: formData
                 });
@@ -905,7 +1369,7 @@
                     const fileName = file.name || "pasted_image.png";
                     // 优先用 server 生成的 thumb_url（300x300 webp），避免原图撑大气泡
                     // 点击图片时跳转到 original_url 看大图
-                    const toAbs = (u) => u.startsWith('/') ? 'http://localhost:8765' + u : u;
+                    const toAbs = (u) => u.startsWith('/') ? baseUrl + u : u;
                     pendingAttachments.push({
                         name: fileName,
                         thumbUrl: toAbs(result.thumb_url),
@@ -983,7 +1447,7 @@
             }
         });
 
-        connect();
+        showLogin(); // 启动即弹登录框：输入秘钥当指挥官，或以测试身份进入
 
         // ============================================================
         // 人员在线状态栏 + @ 自动补全（cc 实现）
@@ -1028,7 +1492,7 @@
 
         async function loadPresence() {
             try {
-                const res = await fetch("http://localhost:8765/api/presence");
+                const res = await fetch(`${baseUrl}/api/presence`);
                 if (!res.ok) return;  // 后端未上线该接口时静默跳过
                 renderPresence(await res.json());
             } catch (e) {
@@ -1131,6 +1595,148 @@
         mentionInput.addEventListener('click', detectMention);
         mentionInput.addEventListener('blur', () => setTimeout(closeMention, 120));
 
+        // ---------- 选中文本提问 ----------
+        const quotePanel = document.getElementById('quote-panel');
+        const quoteQuestionInput = document.getElementById('quote-question-input');
+        const quoteSubmitBtn = document.getElementById('quote-submit-btn');
+        const quoteCancelBtn = document.getElementById('quote-cancel-btn');
+        let quotePanelOpen = false;
+        let currentQuoteText = ""; // 记录打开悬浮窗时的引用原文
+        let currentQuoteAuthor = ""; // 记录被批注原文的作者（发言人）
+
+        // 批注期间保持框选原文高亮：用 Custom Highlight API，不破坏消息 DOM
+        const supportsHighlight = typeof Highlight !== 'undefined' && CSS && CSS.highlights;
+        function applyQuoteHighlight(range) {
+            if (!supportsHighlight) return;
+            CSS.highlights.set('quote-active', new Highlight(range.cloneRange()));
+        }
+        function clearQuoteHighlight() {
+            if (!supportsHighlight) return;
+            CSS.highlights.delete('quote-active');
+        }
+
+        function closestBubble(node) {
+            let el = node;
+            while (el && el.nodeType !== Node.ELEMENT_NODE) {
+                el = el.parentElement;
+            }
+            return el ? el.closest('.bubble') : null;
+        }
+
+        function getSelectionInBubble() {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+            const range = sel.getRangeAt(0);
+            const startBubble = closestBubble(range.startContainer);
+            const endBubble = closestBubble(range.endContainer);
+            if (!startBubble || startBubble !== endBubble) return null;
+            const text = sel.toString().trim();
+            if (!text) return null;
+            return { range, bubble: startBubble, text };
+        }
+
+        function positionQuotePanel(range) {
+            const rect = range.getBoundingClientRect();
+            const gap = 10;
+            const panelWidth = quotePanel.offsetWidth || 240;
+            const panelHeight = quotePanel.offsetHeight || 90;
+            let left = rect.right + gap;
+            let top = rect.top - panelHeight - gap;
+
+            // 右侧放不下则放到左侧
+            if (left + panelWidth > window.innerWidth - gap) {
+                left = rect.left - panelWidth - gap;
+            }
+            // 上方放不下则放到下方
+            if (top < gap) {
+                top = rect.bottom + gap;
+            }
+            quotePanel.style.left = Math.max(gap, left) + 'px';
+            quotePanel.style.top = Math.max(gap, top) + 'px';
+        }
+
+        function openQuotePanel() {
+            const selInfo = getSelectionInBubble();
+            if (!selInfo) { closeQuotePanel(); return; }
+            currentQuoteText = selInfo.text; // 锁定当前的引用文本
+
+            const messageEl = selInfo.bubble.closest('.message');
+            let senderName = "未知";
+            if (messageEl) {
+                const senderEl = messageEl.querySelector('.sender-name');
+                if (senderEl) senderName = senderEl.textContent;
+            }
+            document.getElementById('quote-panel-target').textContent = `正在批注 ${senderName}`;
+            currentQuoteAuthor = senderName; // 保存作者，随批注一起提交
+
+            quotePanelOpen = true;
+            quoteQuestionInput.value = '';
+            quoteQuestionInput.style.height = 'auto';
+            quotePanel.classList.add('show');
+            positionQuotePanel(selInfo.range);
+            applyQuoteHighlight(selInfo.range); // 锁定选区高亮，focus 到输入框后仍可见
+            quoteQuestionInput.focus();
+        }
+
+        function closeQuotePanel() {
+            quotePanelOpen = false;
+            quotePanel.classList.remove('show');
+            quoteQuestionInput.value = '';
+            quoteQuestionInput.style.height = 'auto';
+            clearQuoteHighlight();
+        }
+
+        function renderQuotes() {
+            const container = document.getElementById('quote-preview');
+            if (!container) return;
+            if (pendingQuotes.length === 0) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                return;
+            }
+            container.style.display = 'flex';
+            container.innerHTML = '';
+            pendingQuotes.forEach((q, index) => {
+                const div = document.createElement('div');
+                div.className = 'quote-item';
+                const rawText = q.quoted.split('\n').map(line => line.replace(/^> /, '')).join('\n');
+                div.innerHTML = `
+                    ${q.author && q.author !== '未知' ? `<div class="quote-author">✍ ${escapeHtml(q.author)}</div>` : ''}
+                    <div class="quote-text">${escapeHtml(rawText)}</div>
+                    <div class="quote-annotation">${escapeHtml(q.annotation)}</div>
+                    <button class="quote-remove" onclick="removeQuote(${index})">×</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function removeQuote(index) {
+            pendingQuotes.splice(index, 1);
+            renderQuotes();
+        }
+
+        function submitQuoteQuestion() {
+            const question = quoteQuestionInput.value.trim();
+            if (!question || !currentQuoteText) { closeQuotePanel(); return; }
+
+            const quoted = currentQuoteText.split('\n').map(line => '> ' + line).join('\n');
+            
+            pendingQuotes.push({
+                quoted: quoted,
+                rawText: currentQuoteText,
+                author: currentQuoteAuthor,
+                annotation: question
+            });
+            renderQuotes();
+            currentQuoteText = ""; // 提交后重置
+            currentQuoteAuthor = "";
+            
+            const input = document.getElementById('message-input');
+            input.focus();
+            closeQuotePanel();
+            window.getSelection().removeAllRanges();
+        }
+
         // Wire up image modal zoom / pan / close (modal HTML is after this script, wait for DOM)
         document.addEventListener('DOMContentLoaded', () => {
             const imageModal = document.getElementById('imageModal');
@@ -1143,6 +1749,74 @@
                 window.addEventListener('mousemove', onImageModalMouseMove);
                 window.addEventListener('mouseup', onImageModalMouseUp);
                 window.addEventListener('keydown', onImageModalKeyDown);
+            }
+
+            // ---- Select-text question panel wiring ----
+            if (quotePanel) {
+                // 只在 mouseup 时检查选区，避免单击/拖拽过程中误触发
+                document.addEventListener('mouseup', (e) => {
+                    if (imageModal && imageModal.style.display === 'block') return;
+                    // 点击在悬浮窗内部：忽略，让悬浮窗自己的逻辑处理
+                    if (quotePanel.contains(e.target)) return;
+
+                    // 短暂延迟，等待浏览器完成选区更新
+                    setTimeout(() => {
+                        const selInfo = getSelectionInBubble();
+                        if (selInfo) {
+                            openQuotePanel();
+                        } else if (quotePanelOpen) {
+                            // mouseup 选区清空 → 关闭
+                            closeQuotePanel();
+                            window.getSelection().removeAllRanges();
+                        }
+                    }, 0);
+                });
+
+                document.addEventListener('mousedown', (e) => {
+                    if (quotePanel.contains(e.target)) return;
+                    // 点击在 bubble 内：准备新的框选，先关掉旧的悬浮窗
+                    if (quotePanelOpen) {
+                        closeQuotePanel();
+                        window.getSelection().removeAllRanges();
+                    }
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if (!quotePanelOpen) return;
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeQuotePanel();
+                        window.getSelection().removeAllRanges();
+                    }
+                });
+
+                quoteSubmitBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    submitQuoteQuestion();
+                });
+
+                quoteCancelBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    closeQuotePanel();
+                    window.getSelection().removeAllRanges();
+                });
+
+                quoteQuestionInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        submitQuoteQuestion();
+                    }
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeQuotePanel();
+                        window.getSelection().removeAllRanges();
+                    }
+                });
+
+                quoteQuestionInput.addEventListener('input', function () {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 90) + 'px';
+                });
             }
         });
 

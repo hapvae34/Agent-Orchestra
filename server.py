@@ -46,7 +46,15 @@ async def serve_index():
     """提供前端聊天页面 index.html（根路径 GET）。"""
     from fastapi.responses import FileResponse
     if os.path.exists("index.html"):
-        return FileResponse("index.html", media_type="text/html")
+        return FileResponse(
+            "index.html", 
+            media_type="text/html",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0"
+            }
+        )
     raise HTTPException(status_code=404, detail="index.html not found")
 
 # 生成动态指挥官秘钥
@@ -55,6 +63,12 @@ print("="*50, flush=True)
 print(f"[SECURITY] 系统已启动身份验证防御机制！", flush=True)
 print(f"[SECURITY] 请使用此 8 位动态 PIN 码作为指挥官身份登录: {COMMANDER_TOKEN}", flush=True)
 print("="*50, flush=True)
+
+# 安全：PIN 只打印在终端，绝不落盘。
+# 落盘会让任何能读文件系统的 agent 拿到 PIN 从而冒充人类指挥官，
+# 使身份验证形同虚设——这正是密钥门要防的。
+# 保留访客身份：任何人可免密钥以「测试者」身份进入围观/测试，无特权。
+TESTER_NAME = "测试者"
 
 # 内存中的状态
 class Message(BaseModel):
@@ -250,6 +264,10 @@ async def send_message(req: SendMessageRequest):
                 detail="Invalid Commander Token"
             )
 
+    # 测试者：免密钥公共访客身份，恒无特权（忽略任何 token，role 归一化）
+    if req.name == TESTER_NAME:
+        req.role = "测试者"
+
     # 长文本防御：截断超出 MAX_MESSAGE_BYTES 字节的内容
     content = _truncate_content(req.content)
 
@@ -343,6 +361,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         print(f"[SECURITY WARNING] 拦截到试图伪造 {client_name} 身份的 WebSocket 连接请求！", flush=True)
                         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                         return
+
+                # 测试者：免密钥公共访客身份，恒无特权（role 归一化）
+                if client_name == TESTER_NAME:
+                    role = "测试者"
                 
                 # 记录状态。重连即清除 disconnected_at，退出宽限期恢复监听态。
                 agent_presence[client_name] = {
@@ -437,6 +459,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     print("🚀 Agent Hub (FastAPI) 服务端已启动！")
-    print("🌐 前端 UI WebSocket 请连接 ws://localhost:8765/ws")
+    print(f"🌐 局域网访问请使用 http://本机IP:8765")
     print("📖 API 文档 (Swagger) 请访问 http://localhost:8765/docs")
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    uvicorn.run(app, host="0.0.0.0", port=8765)
