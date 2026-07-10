@@ -45,3 +45,6 @@ chat_scripts/
 # Uploads
 uploads/
 .agent-orchestra/
+.agents/
+chat_history.json
+history.json

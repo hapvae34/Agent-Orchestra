@@ -4,6 +4,7 @@ import uuid
 import sys
 import io
 from datetime import datetime
+import time
 import string
 import random
 from typing import List, Optional
@@ -63,8 +64,77 @@ class Message(BaseModel):
     role: str
     content: str
 
-chat_history: List[Message] = []
+# 历史记录持久化
+HISTORY_FILE = "history.json"
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return [Message(**msg) for msg in data]
+        except Exception as e:
+            print(f"加载历史记录失败: {e}", flush=True)
+    return []
+
+chat_history: List[Message] = load_history()
 MAX_HISTORY = 500
+
+def save_history():
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump([msg.dict() for msg in chat_history], f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"保存历史记录失败: {e}", flush=True)
+
+# 状态管理
+agent_presence = {} # name -> {"role": str, "status": "online"|"probe_listening"|"working"|"offline", "last_seen": float, "type": "ws"|"http", "disconnected_at": float|None}
+
+# 探针断连 / 心跳中断后的宽限期（秒）。
+# 背景：两种探针都是「间歇性」的——WS 单发探针一命中消息就退出唤醒 LLM（WS 随即断连），
+#       HTTP 轮询探针一命中也退出，导致 LLM 处理任务期间没有 WS / 无心跳。
+# 洞见：探针断连 / 心跳中断这个动作本身就是「LLM 开始干活」的信号（探针正是在把控制权交给 LLM 时退出的）。
+# 三态推导：连接中/心跳新鲜=probe_listening（空闲待命）；断连或心跳中断且在宽限内=working（正在干活）；
+#          超过 TTL=offline（真离线：忘挂探针 / 进程死了）。探针端零改动。
+# TTL=300s(5min)：AI 处理复杂任务（读大量源码 / 跑脚本 / 出长篇计划书）静默几分钟是常态，
+#   宽限太短会把『深度干活』误判成『真离线』。宁可多维持 5 分钟 working，也别频繁闪断。
+PRESENCE_GRACE_TTL = 300
+# HTTP 心跳新鲜窗口（秒）：小于此窗口视为「探针仍在轮询=空闲待命」，
+# 超过则说明探针已退出（在唤醒 LLM 干活），进入 working。需 > 探针心跳间隔（通常 3s）。
+HTTP_FRESH_WINDOW = 12
+
+def clean_and_get_presence():
+    now = time.time()
+    for name, data in agent_presence.items():
+        if data.get("status") == "offline":
+            continue
+        if data.get("type") == "ws":
+            # WS 型：连接中维持原态（probe_listening / online）；
+            # 断连则进入 working（干活中），超过 TTL 未重连才判 offline（真离线）。
+            dc = data.get("disconnected_at")
+            if dc is not None:
+                if (now - dc) > PRESENCE_GRACE_TTL:
+                    data["status"] = "offline"
+                elif data["status"] not in ("online",):
+                    # 哨兵探针断连 = 被唤醒干活中。人类用户(online)断连不算干活，走宽限后离线。
+                    data["status"] = "working"
+        else:
+            # HTTP 型：以心跳新鲜度推导。新鲜=仍在轮询待命；心跳中断但在 TTL 内=探针已退出去干活；
+            # 超过 TTL=真离线。人类用户(online)不做 working 推导。
+            gap = now - data.get("last_seen", 0)
+            if gap > PRESENCE_GRACE_TTL:
+                data["status"] = "offline"
+            elif gap > HTTP_FRESH_WINDOW and data["status"] not in ("online",):
+                data["status"] = "working"
+
+    result = []
+    for name, data in agent_presence.items():
+        result.append({
+            "name": name,
+            "role": data["role"],
+            "status": data["status"]
+        })
+    return result
 
 # 单条消息最大长度（字节）。超出部分截断丢弃，避免恶意大消息撑爆内存 / 历史。
 # 注意：这里按 UTF-8 编码字节数算，中文 1 字 = 3 字节，所以 10000 字节 ≈ 3000-3300 个汉字。
@@ -106,6 +176,14 @@ class ConnectionManager:
                 pass
 
 manager = ConnectionManager()
+
+async def broadcast_presence():
+    data = clean_and_get_presence()
+    payload = {
+        "type": "presence",
+        "members": data
+    }
+    await manager.broadcast(json.dumps(payload))
 
 # ================= 媒体上传 API =================
 @app.post("/api/upload/image", summary="上传图片（本地方案）")
@@ -190,6 +268,7 @@ async def send_message(req: SendMessageRequest):
     chat_history.append(msg_obj)
     if len(chat_history) > MAX_HISTORY:
         chat_history.pop(0)
+    save_history()
         
     # 广播给 WebSocket 客户端（包含前端网页）
     ws_payload = {
@@ -219,6 +298,27 @@ async def get_messages(since_id: Optional[str] = None):
     # 如果找不到这个ID，返回全部历史
     return chat_history
 
+class PresenceRequest(BaseModel):
+    name: str
+    role: str = "Agent"
+    status: str = "probe_listening"
+
+@app.post("/api/presence", summary="上报活跃状态 (HTTP探针心跳用)")
+async def report_presence(req: PresenceRequest):
+    agent_presence[req.name] = {
+        "role": req.role,
+        "status": req.status,
+        "last_seen": time.time(),
+        "type": "http",
+        "disconnected_at": None
+    }
+    await broadcast_presence()
+    return {"status": "success"}
+
+@app.get("/api/presence", summary="获取当前所有人员状态")
+async def get_presence():
+    return clean_and_get_presence()
+
 # ================= WebSocket 路由 (给前端 UI 和旧版适配器用) =================
 
 @app.websocket("/ws")
@@ -244,6 +344,16 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
                         return
                 
+                # 记录状态。重连即清除 disconnected_at，退出宽限期恢复监听态。
+                agent_presence[client_name] = {
+                    "role": role,
+                    "status": "probe_listening" if is_silent else "online",
+                    "last_seen": time.time(),
+                    "type": "ws",
+                    "disconnected_at": None
+                }
+                await broadcast_presence()
+                
                 if not is_silent:
                     now_str = datetime.now().strftime("%H:%M:%S")
                     sys_msg = f"{client_name} ({role}) 加入了聊天室"
@@ -256,6 +366,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     ))
                     if len(chat_history) > MAX_HISTORY:
                         chat_history.pop(0)
+                    save_history()
                         
                     await manager.broadcast(json.dumps({
                         "type": "broadcast",
@@ -290,6 +401,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 chat_history.append(msg_obj)
                 if len(chat_history) > MAX_HISTORY:
                     chat_history.pop(0)
+                save_history()
+                    
+                if client_name in agent_presence:
+                    agent_presence[client_name]["last_seen"] = time.time()
                     
                 print(f"[{now_str}] {client_name} (WS): {content}", flush=True)
                 
@@ -301,6 +416,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 }))
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+        if client_name and client_name != "Anonymous":
+            if client_name in agent_presence:
+                # 不立即判离线：进入宽限期。单发探针命中后 WS 会断连，
+                # 但 LLM 处理完任务会重连；只有超过 PRESENCE_GRACE_TTL 未重连才由
+                # clean_and_get_presence() 判为 offline。这里维持原状态、只打断连时间戳。
+                agent_presence[client_name]["disconnected_at"] = time.time()
+                asyncio.create_task(broadcast_presence())
+                
         if not is_silent:
             now_str = datetime.now().strftime("%H:%M:%S")
             sys_msg = f"{client_name} 离开了聊天室"

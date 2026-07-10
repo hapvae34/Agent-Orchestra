@@ -339,6 +339,138 @@
             margin: 8px 0;
             cursor: zoom-in;         /* 鼠标提示：点击放大 */
         }
+
+        /* ===== 人员在线状态栏（cc 实现）===== */
+        #presence-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 8px 20px;
+            background: #f7f9fa;
+            border-bottom: 1px solid #e6e8eb;
+            font-size: 12px;
+            min-height: 20px;
+        }
+
+        #presence-bar .presence-title {
+            color: #8a9099;
+            font-weight: 600;
+            margin-right: 2px;
+        }
+
+        .presence-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: #eef1f3;
+            color: #444;
+            line-height: 1.4;
+        }
+
+        .presence-chip .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #b0b6bd;
+            flex-shrink: 0;
+        }
+
+        .presence-chip.online .dot {
+            background: #2ecc71;
+            box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.25);
+        }
+
+        .presence-chip.probing .dot {
+            background: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+        }
+
+        .presence-chip.working .dot {
+            background: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+            animation: workingPulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes workingPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+
+        .presence-chip.offline {
+            color: #aeb4bb;
+        }
+
+        .presence-chip.offline .dot {
+            background: #cdd2d7;
+        }
+
+        #presence-bar .presence-empty {
+            color: #b0b6bd;
+        }
+
+        /* ===== @ 自动补全悬浮窗（cc 实现）===== */
+        #input-area {
+            position: relative;
+        }
+
+        #mention-popup {
+            position: absolute;
+            left: 60px;
+            bottom: calc(100% + 4px);
+            min-width: 200px;
+            max-height: 220px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #e0e3e7;
+            border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+            z-index: 50;
+            padding: 4px;
+            display: none;
+        }
+
+        #mention-popup.show {
+            display: block;
+        }
+
+        .mention-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .mention-item .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #b0b6bd;
+            flex-shrink: 0;
+        }
+
+        .mention-item.online .dot { background: #2ecc71; }
+        .mention-item.probing .dot { background: #3b82f6; }
+        .mention-item.working .dot { background: #f59e0b; }
+
+        .mention-item.all {
+            border-bottom: 1px solid #eef1f3;
+        }
+
+        .mention-item.all .m-name { color: #10a37f; }
+
+        .mention-item .m-name { font-weight: 600; color: #333; }
+        .mention-item .m-role { color: #9aa0a6; font-size: 11px; }
+
+        .mention-item.active,
+        .mention-item:hover {
+            background: #eef5f2;
+        }
     </style>
 </head>
 
@@ -348,9 +480,14 @@
             <span>🎻 Agent-Orchestra 协作大厅</span>
             <span id="status">未连接</span>
         </div>
+        <div id="presence-bar">
+            <span class="presence-title">在线成员</span>
+            <span class="presence-empty">加载中...</span>
+        </div>
         <div id="messages"></div>
         <div id="attachment-preview"></div>
         <div id="input-area">
+            <div id="mention-popup"></div>
             <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="uploadImage(event)">
             <button id="upload-btn" onclick="document.getElementById('image-upload').click()" title="上传图片">📎</button>
             <textarea id="message-input"
@@ -428,6 +565,7 @@
                 document.getElementById('status').textContent = '已连接 Hub';
                 document.getElementById('status').className = 'connected';
                 ws.send(JSON.stringify({ type: "join", name: myName, role: "User", token: commanderToken }));
+                loadPresence();
             };
 
             ws.onmessage = (event) => {
@@ -435,6 +573,9 @@
                 if (data.type === "broadcast") {
                     appendMessage(data.sender, data.content);
                     renderMermaidDiagrams();
+                } else if (data.type === "presence") {
+                    // 后端推送成员状态变化：data.members = [{name, role, status}]
+                    renderPresence(data.members);
                 }
             };
 
@@ -604,6 +745,32 @@
 
         // 输入框快捷键：Enter 发送 / Shift+Enter 或 Ctrl+Enter 换行
         document.getElementById('message-input').addEventListener('keydown', function (e) {
+            // @ 补全浮层激活时，上下键/回车/Tab/Esc 优先给补全用
+            if (mentionActive && mentionMatches.length > 0) {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    mentionIndex = (mentionIndex + 1) % mentionMatches.length;
+                    renderMentionPopup();
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    mentionIndex = (mentionIndex - 1 + mentionMatches.length) % mentionMatches.length;
+                    renderMentionPopup();
+                    return;
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    applyMention(mentionMatches[mentionIndex]);
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeMention();
+                    return;
+                }
+            }
+
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
                 e.preventDefault();
                 sendMessage();
@@ -629,6 +796,153 @@
         });
 
         connect();
+
+        // ============================================================
+        // 人员在线状态栏 + @ 自动补全（cc 实现）
+        // 契约：GET /api/presence -> [{name, role, status}] status∈{online,probing,offline}
+        //       WS 广播 {type:'presence', members:[...]} 实时刷新
+        // ============================================================
+        let presenceMembers = [];  // 当前成员快照，供 @ 补全复用
+
+        const STATUS_LABEL = { online: '在线', probing: '探针监听中', working: '正在干活', offline: '离线' };
+
+        // 归一化后端状态枚举 → 前端规范值。
+        // 后端 server.py 用 probe_listening，前端统一收敛为 probing，容错各种写法。
+        function normStatus(s) {
+            if (s === 'probing' || s === 'probe_listening' || s === 'probe') return 'probing';
+            if (s === 'online') return 'online';
+            if (s === 'working') return 'working';
+            return 'offline';
+        }
+
+        function renderPresence(members) {
+            if (!Array.isArray(members)) return;
+            presenceMembers = members.map(m => ({ ...m, status: normStatus(m.status) }));
+            const bar = document.getElementById('presence-bar');
+            const order = { online: 0, working: 1, probing: 2, offline: 3 };
+            const sorted = [...presenceMembers].sort((a, b) =>
+                (order[a.status] ?? 4) - (order[b.status] ?? 4) || a.name.localeCompare(b.name)
+            );
+
+            let html = '<span class="presence-title">在线成员</span>';
+            if (sorted.length === 0) {
+                html += '<span class="presence-empty">暂无成员</span>';
+            } else {
+                html += sorted.map(m => {
+                    const st = m.status;  // 已归一化
+                    const title = STATUS_LABEL[st] || st;
+                    return `<span class="presence-chip ${st}" title="${escapeHtml(m.role || '')} · ${title}">`
+                        + `<span class="dot"></span>${escapeHtml(m.name)}</span>`;
+                }).join('');
+            }
+            bar.innerHTML = html;
+        }
+
+        async function loadPresence() {
+            try {
+                const res = await fetch("http://localhost:8765/api/presence");
+                if (!res.ok) return;  // 后端未上线该接口时静默跳过
+                renderPresence(await res.json());
+            } catch (e) {
+                console.warn("presence 接口暂不可用", e);
+            }
+        }
+
+        // ---------- @ 自动补全 ----------
+        const mentionPopup = document.getElementById('mention-popup');
+        const mentionInput = document.getElementById('message-input');
+        let mentionActive = false;    // 补全浮层是否激活
+        let mentionStart = -1;        // '@' 在文本中的位置
+        let mentionIndex = 0;         // 当前高亮项
+        let mentionMatches = [];      // 当前过滤出的候选
+
+        function closeMention() {
+            mentionActive = false;
+            mentionStart = -1;
+            mentionMatches = [];
+            mentionPopup.classList.remove('show');
+            mentionPopup.innerHTML = '';
+        }
+
+        // 对 在线 / 探针监听中 / 正在干活 的成员做补全。
+        // working 也纳入：@ 他只是发消息，等他干完活探针重连即会读到，不会漏。只有真 offline 才排除。
+        // 额外注入虚拟项 all（@所有人）：广播给全体，永远置顶备选。
+        function mentionCandidates(query) {
+            const q = query.toLowerCase();
+            const list = [];
+            // 虚拟 all 项：query 为空或能匹配 'all'/'所有人' 时出现
+            if ('all'.includes(q) || '所有人'.includes(q) || q === '') {
+                list.push({ name: 'all', role: '广播给所有人', status: 'all', virtual: true });
+            }
+            const members = presenceMembers
+                .filter(m => m.status === 'online' || m.status === 'probing' || m.status === 'working')
+                .filter(m => m.name !== myName)
+                .filter(m => m.name.toLowerCase().includes(q));
+            return list.concat(members).slice(0, 8);
+        }
+
+        function renderMentionPopup() {
+            if (mentionMatches.length === 0) { closeMention(); return; }
+            mentionPopup.innerHTML = mentionMatches.map((m, i) => {
+                const st = m.status === 'all' ? 'all'
+                    : (['probing', 'working', 'online'].includes(m.status) ? m.status : 'online');
+                const icon = m.status === 'all' ? '📢' : '<span class="dot"></span>';
+                return `<div class="mention-item ${st} ${i === mentionIndex ? 'active' : ''}" data-idx="${i}">`
+                    + icon
+                    + `<span class="m-name">${escapeHtml(m.name)}</span>`
+                    + `<span class="m-role">${escapeHtml(m.role || '')}</span></div>`;
+            }).join('');
+            mentionPopup.classList.add('show');
+        }
+
+        function applyMention(member) {
+            const val = mentionInput.value;
+            const before = val.slice(0, mentionStart);       // 含 '@' 之前
+            const caret = mentionInput.selectionStart;
+            let after = val.slice(caret);
+            // 若光标后紧跟空格，则不再补空格，避免出现双空格
+            const sep = /^\s/.test(after) ? '' : ' ';
+            const insert = '@' + member.name + sep;
+            mentionInput.value = before + insert + after;
+            const newCaret = (before + insert).length;
+            mentionInput.setSelectionRange(newCaret, newCaret);
+            closeMention();
+            mentionInput.focus();
+            autoResize();
+        }
+
+        // 检测光标前是否处于 '@xxx' 的输入态
+        function detectMention() {
+            const val = mentionInput.value;
+            const caret = mentionInput.selectionStart;
+            const textBefore = val.slice(0, caret);
+            const at = textBefore.lastIndexOf('@');
+            if (at === -1) { closeMention(); return; }
+            // '@' 前必须是行首或空白，避免邮箱等误触发
+            if (at > 0 && !/\s/.test(textBefore[at - 1])) { closeMention(); return; }
+            const query = textBefore.slice(at + 1);
+            // query 内不能有空格（一旦空格说明 @ 已结束）
+            if (/\s/.test(query)) { closeMention(); return; }
+            mentionStart = at;
+            mentionMatches = mentionCandidates(query);
+            mentionIndex = 0;
+            mentionActive = mentionMatches.length > 0;
+            renderMentionPopup();
+        }
+
+        mentionPopup.addEventListener('mousedown', (e) => {
+            // mousedown 而非 click：抢在 textarea blur 之前触发
+            const item = e.target.closest('.mention-item');
+            if (!item) return;
+            e.preventDefault();
+            const idx = parseInt(item.dataset.idx, 10);
+            if (mentionMatches[idx]) applyMention(mentionMatches[idx]);
+        });
+
+        mentionInput.addEventListener('input', detectMention);
+        mentionInput.addEventListener('click', detectMention);
+        mentionInput.addEventListener('blur', () => setTimeout(closeMention, 120));
+
     </script>
 </body>
 
