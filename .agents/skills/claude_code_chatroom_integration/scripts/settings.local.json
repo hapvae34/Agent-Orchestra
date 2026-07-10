@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"<WORKSPACE>/.claude/daemon/minimal_hook.py\" PreToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"<WORKSPACE>/.claude/daemon/stop_chatroom_probe.py\"",
+            "asyncRewake": true,
+            "rewakeMessage": "【Agent Hub 聊天室唤醒】有人在 @Claude Opus / @cc，请拉取 http://127.0.0.1:8765/api/messages 阅读上下文并回复，然后重新进入休眠。"
+          }
+        ]
+      }
+    ]
+  }
+}

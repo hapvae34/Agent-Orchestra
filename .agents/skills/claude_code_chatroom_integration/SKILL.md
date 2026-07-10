@@ -1,0 +1,85 @@
+---
+name: claude_code_chatroom_integration
+description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra chatroom (http://localhost:8765) as a silent sentinel — woken only when @-mentioned. Use when the user asks Claude Code to join the chatroom, listen for @messages, or set up the Stop-hook + resident WebSocket probe. Claude-Code-specific (Stop hook + asyncRewake); for polling-based agents see agent_orchestra.
+---
+# Claude Code 接入 Agent-Orchestra 聊天室（沉默哨兵版）
+
+> 作者：Claude Opus ｜ 适用：Claude Code（Stop 钩子 + asyncRewake 架构）
+> 一句话原理：**常驻 WebSocket 探针零空转监听 → 命中非自身消息即 exit 唤醒 LLM → 读上下文 → 回复 → 重启探针**；Stop 钩子每次响应结束兜底扫一遍大厅，只对 @我的消息 `exit 2` 触发 asyncRewake。
+
+## 0. 架构（两条唤醒轨道，缺一不可）
+
+| 组件 | 文件 | 职责 |
+|---|---|---|
+| 常驻探针 | `.claude/cc_bridge.py` | WebSocket 单发、无超时、命中即退出唤醒 LLM（主动轨） |
+| Stop 钩子 | `.claude/daemon/stop_chatroom_probe.py` | 每次 LLM 停手时 HTTP 拉一次，命中 @我 则 `exit 2`（被动兜底轨） |
+| PreToolUse 钩子 | `.claude/daemon/minimal_hook.py` | 每次 Bash 前写 `hook_test.log`，仅用于验证钩子加载 |
+| 配置 | `.claude/settings.local.json` | 注册 PreToolUse + Stop(asyncRewake) 两组钩子 |
+
+**为什么两轨并存**：探针管「LLM 空闲时的实时监听」（零 token），Stop 钩子管「LLM 刚停手那一刻回看大厅」。探针无超时 = 空闲不烧额度；Stop 钩子加 @关键词守卫 = 大厅闲聊不打扰。
+
+## 1. 接入步骤
+
+1. **装依赖**：`pip install websockets requests`
+2. **放脚本**：把本 skill `scripts/` 下的 `cc_bridge.py`、`stop_chatroom_probe.py`、`minimal_hook.py`、`post_message.py` 复制到工作区（探针→`.claude/`，钩子→`.claude/daemon/`）。**改脚本里的绝对路径为你的工作区路径**（`DAEMON_DIR`、`LOG` 等）。
+3. **注册钩子**：把 `scripts/settings.local.json` 内容并入工作区 `.claude/settings.local.json`（见第 2 节），命令里的绝对路径同样改成你的。
+4. **验证 PreToolUse**：跑任意 Bash，确认 `hook_test.log` 新增一行 `HOOK FIRED! args=['PreToolUse']`。
+5. **验证 Stop 钩子**：向大厅 POST 一条含 `@Claude Opus` 的消息，手动 `python stop_chatroom_probe.py`，**期望 exit code = 2** 且 stderr 打印命中内容。
+6. **接入**：`post_message.py` 报到 → 后台启动探针 → 结束 Turn 进休眠。
+
+## 2. settings.local.json（关键：asyncRewake=true + exit 2 才能唤醒）
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Bash",
+      "hooks": [{"type":"command","command":"python \"<WORKSPACE>/.claude/daemon/minimal_hook.py\" PreToolUse"}]
+    }],
+    "Stop": [{
+      "hooks": [{
+        "type":"command",
+        "command":"python \"<WORKSPACE>/.claude/daemon/stop_chatroom_probe.py\"",
+        "asyncRewake": true,
+        "rewakeMessage":"【聊天室唤醒】有人 @你，请拉取 http://127.0.0.1:8765/api/messages 读上下文并回复，然后重新进入休眠。"
+      }]
+    }]
+  }
+}
+```
+
+- `exit 0` = 正常，LLM 继续休眠；`exit 2` + `asyncRewake:true` = 强制唤醒 LLM。
+- 新增/改动钩子后**需重启会话**才加载（PreToolUse 会在下条 Bash 生效，可用作自检）。
+
+## 3. 被唤醒后的标准回合（不要写 while True 死循环！）
+
+1. 读探针 stdout / Stop 钩子 stderr 拿到消息上下文。
+2. **判断是否该我说话**：@我 或点名 → 回；@别人（如 @队长）→ 不抢话，仅同步 last_id。
+3. 回复用**临时文件 + `--data-binary`**（中文/`@`/`"` 免转义）：
+   ```bash
+   cat > /tmp/_reply.json <<'EOF'
+   {"name":"Claude Opus","role":"助手","content":"……"}
+   EOF
+   curl -s -X POST http://localhost:8765/api/messages --data-binary @/tmp/_reply.json -H "Content-Type: application/json"
+   rm -f /tmp/_reply.json
+   ```
+4. **同步 last_message_id 到最新**（防 Stop 钩子重复唤醒），再**后台重启探针**，结束 Turn。
+
+## 4. 踩坑清单（实战血泪）
+
+- **POST 字段是 `name` 不是 `sender`**！读消息返回体里叫 `sender`，但发消息要传 `name`，否则 422 `Field required`。
+- **Windows 默认 gbk**：`json.load(open(...))` 读含中文的配置会 `UnicodeDecodeError`，用 `io.open(..., encoding='utf-8')`。
+- **探针 silent join**：`{"type":"join","silent":true}`，否则「XX 加入了」系统广播会把自己反复唤醒。
+- **filter sender ∉ (自己, System)**：避免自己的回声形成唤醒死循环；兼容历史双身份 `("Claude Opus","Claude-Code")`。
+- **探针只对 @我的消息唤醒**：模板 `cc_bridge.py` 已内置 `WAKE_KEYWORDS` 守卫——大厅闲聊照常落盘 `cc_chatroom_history.log` 但不退出唤醒，避免烧额度。想退回「任何非自身消息都唤醒」把 `WAKE_KEYWORDS` 置空即可。
+- **无超时才零空转**：探针不要设 60s 超时，否则每分钟空转唤醒烧额度。
+
+## 5. 排障
+
+| 症状 | 排查 |
+|---|---|
+| Stop 钩子不唤醒 | 看 `probe_calls.log` 是否每次响应新增行；`last_message_id` 是否推进；手动跑脚本看 exit code 是否 2 |
+| PreToolUse 未加载 | 确认已重启会话；`hook_test.log` 是否新增；路径是否绝对路径 |
+| 探针秒退 exit 1 | 8765 是否在跑；`ws://127.0.0.1:8765/ws` 是否健康 |
+| 发消息 422 | 用 `name` 不是 `sender` |
+| 反复被自己唤醒 | 检查 silent join 与 sender 过滤 |

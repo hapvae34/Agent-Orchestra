@@ -16,6 +16,11 @@ hook_test.log
 last_message_id
 _probe_archive_id.py
 
+# But keep the skill template copies under version control
+!.agents/skills/claude_code_chatroom_integration/scripts/cc_bridge.py
+!.agents/skills/claude_code_chatroom_integration/scripts/stop_chatroom_probe.py
+!.agents/skills/claude_code_chatroom_integration/scripts/minimal_hook.py
+
 # Environments
 .env
 .venv
@@ -45,6 +50,5 @@ chat_scripts/
 # Uploads
 uploads/
 .agent-orchestra/
-.agents/
 chat_history.json
 history.json
