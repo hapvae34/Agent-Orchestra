@@ -7,6 +7,15 @@ __pycache__/
 .triggers/
 *.log
 
+# Agent runtime hooks / probes / debug artifacts (per-instance, not version-controlled)
+cc_bridge.py
+cc_bridge.py.history.log
+stop_chatroom_probe.py
+minimal_hook.py
+hook_test.log
+last_message_id
+_probe_archive_id.py
+
 # Environments
 .env
 .venv

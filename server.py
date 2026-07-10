@@ -39,6 +39,15 @@ app.add_middleware(
 os.makedirs("uploads", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+
+@app.get("/", include_in_schema=False)
+async def serve_index():
+    """提供前端聊天页面 index.html（根路径 GET）。"""
+    from fastapi.responses import FileResponse
+    if os.path.exists("index.html"):
+        return FileResponse("index.html", media_type="text/html")
+    raise HTTPException(status_code=404, detail="index.html not found")
+
 # 生成动态指挥官秘钥
 COMMANDER_TOKEN = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 print("="*50, flush=True)
@@ -56,6 +65,26 @@ class Message(BaseModel):
 
 chat_history: List[Message] = []
 MAX_HISTORY = 500
+
+# 单条消息最大长度（字节）。超出部分截断丢弃，避免恶意大消息撑爆内存 / 历史。
+# 注意：这里按 UTF-8 编码字节数算，中文 1 字 = 3 字节，所以 10000 字节 ≈ 3000-3300 个汉字。
+MAX_MESSAGE_BYTES = 10000
+
+
+def _truncate_content(content: str, max_bytes: int = MAX_MESSAGE_BYTES) -> str:
+    """把 content 截断到 max_bytes 字节以内（按 UTF-8 编码）。
+    截断时必须保证不破坏 UTF-8 多字节字符：如果某个字符跨越边界，直接丢弃它及之后的全部内容。
+    返回可能带 '[已截断]' 后缀的字符串，便于前端展示。"""
+    if not content:
+        return content
+    encoded = content.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return content
+    truncated = encoded[:max_bytes]
+    # 防御性回退：若截断点恰好落在多字节字符中间，向左回退到合法边界
+    while truncated and (truncated[-1] & 0xC0) == 0x80:
+        truncated = truncated[:-1]
+    return truncated.decode("utf-8", errors="ignore") + "\n\n[消息已截断：超出 " + str(len(encoded) - max_bytes) + " 字节]"
 
 class ConnectionManager:
     def __init__(self):
@@ -143,6 +172,9 @@ async def send_message(req: SendMessageRequest):
                 detail="Invalid Commander Token"
             )
 
+    # 长文本防御：截断超出 MAX_MESSAGE_BYTES 字节的内容
+    content = _truncate_content(req.content)
+
     msg_id = str(uuid.uuid4())
     now_str = datetime.now().strftime("%H:%M:%S")
     
@@ -151,7 +183,7 @@ async def send_message(req: SendMessageRequest):
         timestamp=now_str,
         sender=req.name,
         role=req.role,
-        content=req.content
+        content=content
     )
     
     # 存入历史
@@ -236,13 +268,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 content = msg.get("content")
                 token = msg.get("token")
                 now_str = datetime.now().strftime("%H:%M:%S")
-                
+
                 # 双重鉴权发消息
                 if client_name == "人类指挥官" or client_name.lower() == "system":
                     if token != COMMANDER_TOKEN:
                         print(f"[SECURITY WARNING] 拦截到试图伪造 {client_name} 身份发出的 WebSocket 消息！", flush=True)
                         continue
-                
+
+                # 长文本防御：截断超出 MAX_MESSAGE_BYTES 字节的内容
+                content = _truncate_content(content)
+
                 msg_id = str(uuid.uuid4())
                 msg_obj = Message(
                     id=msg_id,

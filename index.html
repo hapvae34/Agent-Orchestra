@@ -1,126 +1,167 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agent-Orchestra - 实时协作交响乐团</title>
     <style>
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-            background-color: #f0f2f5; 
-            margin: 0; 
-            padding: 20px; 
-            display: flex; 
-            justify-content: center; 
-            height: 100vh; 
-            box-sizing: border-box; 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            box-sizing: border-box;
         }
-        #chat-container { 
-            width: 100%; 
-            max-width: 900px; 
-            background: white; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
+
+        #chat-container {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-        #chat-header { 
-            background: #10a37f; /* ChatGPT 风格绿 */
-            color: white; 
-            padding: 15px 20px; 
-            font-weight: bold; 
-            font-size: 18px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
+
+        #chat-header {
+            background: #10a37f;
+            /* ChatGPT 风格绿 */
+            color: white;
+            padding: 15px 20px;
+            font-weight: bold;
+            font-size: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        #status { 
-            font-size: 13px; 
-            background: #e04a4a; 
-            padding: 4px 10px; 
-            border-radius: 12px; 
+
+        #status {
+            font-size: 13px;
+            background: #e04a4a;
+            padding: 4px 10px;
+            border-radius: 12px;
         }
-        #status.connected { 
-            background: #0d8a6b; 
+
+        #status.connected {
+            background: #0d8a6b;
         }
-        #messages { 
-            flex: 1; 
-            padding: 20px; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
+
+        #messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
             background: #fafafa;
         }
-        .message { 
-            max-width: 85%; 
-            display: flex; 
-            flex-direction: column; 
+
+        .message {
+            max-width: 85%;
+            display: flex;
+            flex-direction: column;
         }
-        .message.system { 
-            align-self: center; 
-            background: #e9ecef; 
-            color: #666; 
-            font-size: 12px; 
-            padding: 5px 15px; 
-            border-radius: 20px; 
+
+        .message.system {
+            align-self: center;
+            background: #e9ecef;
+            color: #666;
+            font-size: 12px;
+            padding: 5px 15px;
+            border-radius: 20px;
         }
-        .message.others { 
-            align-self: flex-start; 
+
+        .message.others {
+            align-self: flex-start;
         }
-        .message.me { 
-            align-self: flex-end; 
+
+        .message.me {
+            align-self: flex-end;
         }
-        .sender-name { 
-            font-size: 12px; 
-            color: #888; 
-            margin-bottom: 4px; 
-            margin-left: 2px; 
+
+        .sender-name {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 4px;
+            margin-left: 2px;
         }
-        .message.me .sender-name { 
-            text-align: right; 
-            margin-right: 2px; 
+
+        .message.me .sender-name {
+            text-align: right;
+            margin-right: 2px;
         }
-        .bubble { 
-            padding: 12px 16px; 
-            border-radius: 12px; 
-            font-size: 14px; 
-            line-height: 1.6; 
-            word-wrap: break-word; 
-            white-space: pre-wrap; 
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            word-wrap: break-word;
+            white-space: normal;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
-        .message.others .bubble { 
-            background: white; 
-            color: #333; 
-            border-top-left-radius: 4px; 
+        /* 重置 Markdown 块级元素在气泡里的默认 margin，避免单行消息被撑成两行 */
+        .bubble p,
+        .bubble h1,
+        .bubble h2,
+        .bubble h3,
+        .bubble ul,
+        .bubble ol,
+        .bubble blockquote,
+        .bubble table,
+        .bubble pre {
+            margin: 0;
+        }
+        .bubble p + p,
+        .bubble p + pre,
+        .bubble pre + p,
+        .bubble p + ul,
+        .bubble p + ol,
+        .bubble p + blockquote,
+        .bubble p + table {
+            margin-top: 6px;
+        }
+
+        .message.others .bubble {
+            background: white;
+            color: #333;
+            border-top-left-radius: 4px;
             border: 1px solid #eee;
         }
-        .message.me .bubble { 
-            background: #10a37f; 
-            color: white; 
-            border-top-right-radius: 4px; 
+
+        .message.me .bubble {
+            background: #10a37f;
+            color: white;
+            border-top-right-radius: 4px;
         }
-        #input-area { 
-            padding: 15px; 
-            border-top: 1px solid #eee; 
-            display: flex; 
-            gap: 10px; 
-            background: white; 
+
+        #input-area {
+            padding: 15px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            background: white;
         }
-        #message-input { 
-            flex: 1; 
-            padding: 12px 15px; 
-            border: 1px solid #ccc; 
-            border-radius: 24px; 
-            outline: none; 
-            font-size: 14px; 
+
+        #message-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ccc;
+            border-radius: 24px;
+            outline: none;
+            font-size: 14px;
             transition: border-color 0.2s;
         }
-        #message-input:focus { 
-            border-color: #10a37f; 
+
+        #message-input:focus {
+            border-color: #10a37f;
         }
+
         #upload-btn {
             background: #f0f2f5;
             color: #333;
@@ -131,22 +172,26 @@
             font-size: 16px;
             transition: background 0.2s;
         }
+
         #upload-btn:hover {
             background: #e4e6e9;
         }
-        #send-btn { 
-            background: #10a37f; 
-            color: white; 
-            border: none; 
-            padding: 10px 24px; 
-            border-radius: 24px; 
-            cursor: pointer; 
-            font-weight: bold; 
+
+        #send-btn {
+            background: #10a37f;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 24px;
+            cursor: pointer;
+            font-weight: bold;
             transition: background 0.2s;
         }
-        #send-btn:hover { 
-            background: #0d8a6b; 
+
+        #send-btn:hover {
+            background: #0d8a6b;
         }
+
         #attachment-preview {
             display: none;
             padding: 10px 15px;
@@ -155,16 +200,19 @@
             gap: 10px;
             overflow-x: auto;
         }
+
         .attachment-item {
             position: relative;
             display: inline-block;
         }
+
         .attachment-item img {
             height: 60px;
             border-radius: 6px;
             border: 1px solid #ddd;
             object-fit: cover;
         }
+
         .attachment-remove {
             position: absolute;
             top: -6px;
@@ -180,22 +228,120 @@
             cursor: pointer;
             border: none;
             padding: 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
-    </script>
-    <style>
-        /* 增加一个简单的 Markdown 样式（只是为了让代码块看起来更好） */
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script><script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/java.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/xml.min.js"></script><script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/sql.min.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css"><script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script><style>.hljs {
+            background: transparent;
+            padding: 0;
+        }
+
+        .bubble pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .bubble pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
         .bubble code {
             background: #f4f4f4;
             padding: 2px 4px;
             border-radius: 4px;
             font-family: monospace;
         }
+
         .message.me .bubble code {
-            background: rgba(0,0,0,0.2);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .bubble blockquote {
+            border-left: 3px solid #ccc;
+            margin: 6px 0;
+            padding: 4px 12px;
+            color: #555;
+            background: rgba(0, 0, 0, 0.03);
+        }
+
+        .bubble h1,
+        .bubble h2,
+        .bubble h3 {
+            margin: 8px 0 4px;
+            font-weight: bold;
+        }
+
+        .bubble h1 {
+            font-size: 18px;
+        }
+
+        .bubble h2 {
+            font-size: 16px;
+        }
+
+        .bubble h3 {
+            font-size: 15px;
+        }
+
+        .bubble ul,
+        .bubble ol {
+            margin: 4px 0;
+            padding-left: 24px;
+        }
+
+        .bubble table {
+            border-collapse: collapse;
+            margin: 8px 0;
+        }
+
+        .bubble table th,
+        .bubble table td {
+            border: 1px solid #ddd;
+            padding: 4px 8px;
+        }
+
+        .bubble .mermaid {
+            text-align: center;
+            margin: 8px 0;
+            background: white;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .message.me .bubble .mermaid {
+            background: rgba(255, 255, 255, 0.95);
+        }
+
+        .message.me .bubble pre {
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .message.me .bubble blockquote {
+            border-left-color: rgba(255, 255, 255, 0.4);
+            color: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .bubble img {
+            max-width: 100%;
+            max-height: 320px;        /* 限制最大高度，避免大图撑大气泡 */
+            width: auto;
+            height: auto;
+            display: block;
+            border-radius: 6px;
+            margin: 8px 0;
+            cursor: zoom-in;         /* 鼠标提示：点击放大 */
         }
     </style>
 </head>
+
 <body>
     <div id="chat-container">
         <div id="chat-header">
@@ -207,7 +353,8 @@
         <div id="input-area">
             <input type="file" id="image-upload" accept="image/*" style="display: none;" onchange="uploadImage(event)">
             <button id="upload-btn" onclick="document.getElementById('image-upload').click()" title="上传图片">📎</button>
-            <input type="text" id="message-input" placeholder="输入你想对 Agents 说的话 (例如：@Hermes 帮我写一个测试)..." onkeypress="if(event.key === 'Enter') sendMessage()">
+            <textarea id="message-input"
+                placeholder="输入你想对 Agents 说的话 (例如：@Hui 帮我写一个测试)...&#10;Enter 发送 / Shift+Enter 换行" rows="1"></textarea>
             <button id="send-btn" onclick="sendMessage()">发送</button>
         </div>
     </div>
@@ -216,6 +363,38 @@
         const myName = "人类指挥官";
         let commanderToken = null;
         let ws;
+        let mermaidInitialized = false;
+
+        // 初始化 marked + highlight.js + mermaid
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function (code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    try { return hljs.highlight(code, { language: lang }).value; }
+                    catch (e) { }
+                }
+                try { return hljs.highlightAuto(code).value; }
+                catch (e) { return code; }
+            }
+        });
+
+        // 扩展 marked 渲染器：mermaid 代码块转 <div class="mermaid">
+        const renderer = new marked.Renderer();
+        const originalCode = renderer.code.bind(renderer);
+        renderer.code = function (code, language) {
+            if (language === 'mermaid') {
+                return '<div class="mermaid">' + code + '</div>';
+            }
+            return originalCode(code, language);
+        };
+        marked.use({ renderer });
+
+        function initMermaid() {
+            if (mermaidInitialized) return;
+            mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
+            mermaidInitialized = true;
+        }
 
         async function loadHistory() {
             try {
@@ -226,7 +405,8 @@
                 history.forEach(msg => {
                     appendMessage(msg.sender, msg.content, true);
                 });
-            } catch(e) {
+                renderMermaidDiagrams();
+            } catch (e) {
                 console.error("Failed to load history", e);
             }
         }
@@ -239,16 +419,14 @@
                     return;
                 }
             }
-            
-            // 先加载历史记录
+
             loadHistory();
-            
+
             ws = new WebSocket("ws://localhost:8765/ws");
-            
+
             ws.onopen = () => {
                 document.getElementById('status').textContent = '已连接 Hub';
                 document.getElementById('status').className = 'connected';
-                // 以人类身份加入握手，带上身份秘钥
                 ws.send(JSON.stringify({ type: "join", name: myName, role: "User", token: commanderToken }));
             };
 
@@ -256,34 +434,73 @@
                 const data = JSON.parse(event.data);
                 if (data.type === "broadcast") {
                     appendMessage(data.sender, data.content);
+                    renderMermaidDiagrams();
                 }
             };
 
             ws.onclose = () => {
                 document.getElementById('status').textContent = '已断开，正在重连...';
                 document.getElementById('status').className = '';
-                setTimeout(connect, 3000); // 断线自动重连
+                setTimeout(connect, 3000);
             };
         }
 
         function appendMessage(sender, content) {
             const msgsDiv = document.getElementById('messages');
             const msgEl = document.createElement('div');
-            
+
             if (sender === "System") {
                 msgEl.className = 'message system';
                 msgEl.textContent = content;
             } else if (sender === myName) {
                 msgEl.className = 'message me';
-                msgEl.innerHTML = `<div class="sender-name">我</div><div class="bubble">${escapeHtmlAndParseMarkdown(content)}</div>`;
+                msgEl.innerHTML = `<div class="sender-name">我</div><div class="bubble">${renderMarkdown(content)}</div>`;
             } else {
                 msgEl.className = 'message others';
-                msgEl.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${escapeHtmlAndParseMarkdown(content)}</div>`;
+                msgEl.innerHTML = `<div class="sender-name">${sender}</div><div class="bubble">${renderMarkdown(content)}</div>`;
             }
-            
+
             msgsDiv.appendChild(msgEl);
-            // 自动滚动到底部
             msgsDiv.scrollTop = msgsDiv.scrollHeight;
+        }
+
+        // Markdown 渲染：marked → DOMPurify 防 XSS
+        function renderMarkdown(content) {
+            try {
+                const html = marked.parse(content || '');
+                return DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
+            } catch (e) {
+                console.error("Markdown render error", e);
+                return escapeHtml(content);
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || '')
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // 异步渲染所有未渲染的 mermaid 图
+        async function renderMermaidDiagrams() {
+            initMermaid();
+            const nodes = document.querySelectorAll('.mermaid:not([data-rendered])');
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                const source = node.textContent;
+                try {
+                    const id = 'mermaid-' + Date.now() + '-' + i;
+                    const { svg } = await mermaid.render(id, source);
+                    node.innerHTML = svg;
+                    node.setAttribute('data-rendered', 'true');
+                } catch (e) {
+                    node.innerHTML = '<pre style="color:#c00;">Mermaid 渲染失败: ' + escapeHtml(e.message) + '\n\n' + escapeHtml(source) + '</pre>';
+                    node.setAttribute('data-rendered', 'true');
+                }
+            }
         }
 
         let pendingAttachments = [];
@@ -300,7 +517,7 @@
                 const div = document.createElement('div');
                 div.className = 'attachment-item';
                 div.innerHTML = `
-                    <img src="${att.url}" alt="${att.name}" title="${att.name}">
+                    <img src="${att.thumbUrl}" alt="${att.name}" title="${att.name}">
                     <button class="attachment-remove" onclick="removeAttachment(${index})">×</button>
                 `;
                 container.appendChild(div);
@@ -315,53 +532,40 @@
         function sendMessage() {
             const input = document.getElementById('message-input');
             let content = input.value.trim();
-            
+
             if (pendingAttachments.length > 0) {
-                const attachmentMarkdown = pendingAttachments.map(att => `![${att.name}](${att.url})`).join(' ');
+                // 消息里用 originalUrl（点击可看大图），本地预览用 thumbUrl（不撑大气泡）
+                const attachmentMarkdown = pendingAttachments.map(att => `![${att.name}](${att.originalUrl})`).join(' ');
                 content = content ? `${content}\n${attachmentMarkdown}` : attachmentMarkdown;
             }
 
             if (content && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: "message", content: content, token: commanderToken }));
                 input.value = '';
+                autoResize();
                 pendingAttachments = [];
                 renderAttachments();
             }
         }
 
-        // 简单的防止 HTML 注入，同时保留换行，并解析 Markdown 图片
-        function escapeHtmlAndParseMarkdown(unsafe) {
-            let safe = unsafe
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
-                 
-            // 解析 Markdown 图片: ![alt](url)
-            safe = safe.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, url) => {
-                // 如果 url 不是完整的 http，补全以便跨域测试
-                const fullUrl = url.startsWith('/') ? 'http://localhost:8765' + url : url;
-                // 将 thumb 替换回 original 用于点击查看大图
-                const originalUrl = fullUrl.replace('_thumb.webp', '.jpg').replace('_thumb.webp', '.png'); 
-                // 由于我们不知道原图后缀，最好后端返回 original_url 或者让 url 保持一致
-                // 简化起见，这里直接用 fullUrl 展示，如果需要可以做更复杂的查看逻辑
-                return `<br><a href="${fullUrl.replace('_thumb.webp', '.jpg')}" target="_blank"><img src="${fullUrl}" alt="${alt}" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin-top: 5px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></a>`;
-            });
-            return safe;
+        // textarea 自适应高度
+        function autoResize() {
+            const input = document.getElementById('message-input');
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 160) + 'px';
         }
 
         async function handleFileUpload(file) {
             if (!file) return;
-            
+
             const formData = new FormData();
             formData.append("file", file);
-            
+
             const inputEl = document.getElementById('message-input');
             const originalPlaceholder = inputEl.placeholder;
             inputEl.placeholder = "正在上传图片...";
             inputEl.disabled = true;
-            
+
             try {
                 const response = await fetch("http://localhost:8765/api/upload/image", {
                     method: "POST",
@@ -370,8 +574,14 @@
                 const result = await response.json();
                 if (response.ok) {
                     const fileName = file.name || "pasted_image.png";
-                    const fullUrl = result.original_url.startsWith('/') ? 'http://localhost:8765' + result.original_url : result.original_url;
-                    pendingAttachments.push({ name: fileName, url: fullUrl });
+                    // 优先用 server 生成的 thumb_url（300x300 webp），避免原图撑大气泡
+                    // 点击图片时跳转到 original_url 看大图
+                    const toAbs = (u) => u.startsWith('/') ? 'http://localhost:8765' + u : u;
+                    pendingAttachments.push({
+                        name: fileName,
+                        thumbUrl: toAbs(result.thumb_url),
+                        originalUrl: toAbs(result.original_url),
+                    });
                     renderAttachments();
                 } else {
                     alert("上传失败: " + result.detail);
@@ -392,8 +602,19 @@
             event.target.value = "";
         }
 
+        // 输入框快捷键：Enter 发送 / Shift+Enter 或 Ctrl+Enter 换行
+        document.getElementById('message-input').addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+            // Shift+Enter 或 Ctrl+Enter：默认行为（插入换行）
+        });
+
+        document.getElementById('message-input').addEventListener('input', autoResize);
+
         // 监听粘贴事件支持图片粘贴
-        document.getElementById('message-input').addEventListener('paste', function(e) {
+        document.getElementById('message-input').addEventListener('paste', function (e) {
             const items = (e.clipboardData || window.clipboardData).items;
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image/') !== -1) {
@@ -407,8 +628,8 @@
             }
         });
 
-        // 初始化连接
         connect();
     </script>
 </body>
+
 </html>
