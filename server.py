@@ -329,14 +329,152 @@ async def get_messages(since_id: Optional[str] = None):
     """
     if not since_id:
         return chat_history
-    
+
     # 查找 since_id 的索引
     for i, msg in enumerate(chat_history):
         if msg.id == since_id:
             return chat_history[i+1:]
-    
+
     # 如果找不到这个ID，返回全部历史
     return chat_history
+
+# ================= 全局任务黑板 (Phase 2 P0) =================
+# 设计：4 条 API + JSON 持久化（与 chat_history 同模式），不引 DB。
+# Task ID 用 UUID，priority 必填（P0/P1/P2/P3，默认 P2），deadline Optional ISO 8601。
+# 落盘：data/blackboard.json（与 chat_history.json 平级，业务数据不进 infra/）。
+
+DATA_DIR = "data"
+os.makedirs(DATA_DIR, exist_ok=True)
+BLACKBOARD_FILE = os.path.join(DATA_DIR, "blackboard.json")
+
+
+class TaskHistoryEntry(BaseModel):
+    at: str
+    who: str
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    note: Optional[str] = None
+
+
+class Task(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    status: str = "todo"  # todo / doing / done / blocked
+    priority: str = "P2"  # P0 / P1 / P2 / P3
+    deadline: Optional[str] = None  # ISO 8601
+    tags: List[str] = []
+    created_at: str
+    updated_at: str
+    history: List[TaskHistoryEntry] = []
+
+
+def load_blackboard() -> List[Task]:
+    if not os.path.exists(BLACKBOARD_FILE):
+        return []
+    try:
+        with open(BLACKBOARD_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return [Task(**t) for t in data]
+    except Exception as e:
+        print(f"[BLACKBOARD] 加载失败（忽略，从空开始）: {e}", flush=True)
+        return []
+
+
+def save_blackboard(tasks: List[Task]) -> None:
+    try:
+        with open(BLACKBOARD_FILE, "w", encoding="utf-8") as f:
+            json.dump([t.model_dump() for t in tasks], f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[BLACKBOARD] 保存失败: {e}", flush=True)
+
+
+blackboard: List[Task] = load_blackboard()
+print(f"[BLACKBOARD] 启动加载: {len(blackboard)} 条任务 ({BLACKBOARD_FILE})", flush=True)
+
+
+class CreateTaskRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    priority: str = "P2"
+    deadline: Optional[str] = None
+    tags: List[str] = []
+
+
+class UpdateStatusRequest(BaseModel):
+    status: str
+    who: str
+    note: Optional[str] = None
+
+
+class ClaimRequest(BaseModel):
+    who: str
+
+
+@app.post("/api/blackboard", summary="新建任务", response_model=Task)
+async def create_task(req: CreateTaskRequest):
+    if req.priority not in ("P0", "P1", "P2", "P3"):
+        raise HTTPException(status_code=400, detail="priority must be P0/P1/P2/P3")
+
+    now = datetime.now().isoformat(timespec="seconds")
+    task = Task(
+        id=str(uuid.uuid4()),
+        title=req.title,
+        description=req.description,
+        owner=req.owner,
+        status="todo",
+        priority=req.priority,
+        deadline=req.deadline,
+        tags=req.tags,
+        created_at=now,
+        updated_at=now,
+        history=[TaskHistoryEntry(at=now, who=req.owner or "anonymous", to_status="todo", note="created")],
+    )
+    blackboard.append(task)
+    save_blackboard(blackboard)
+    return task
+
+
+@app.get("/api/blackboard", summary="拉取任务列表", response_model=List[Task])
+async def list_tasks(since_id: Optional[str] = None):
+    if not since_id:
+        return blackboard
+    for i, t in enumerate(blackboard):
+        if t.id == since_id:
+            return blackboard[i+1:]
+    return blackboard
+
+
+@app.post("/api/blackboard/{task_id}/claim", summary="抢单（设置 owner）", response_model=Task)
+async def claim_task(task_id: str, req: ClaimRequest):
+    for t in blackboard:
+        if t.id == task_id:
+            now = datetime.now().isoformat(timespec="seconds")
+            old_owner = t.owner
+            t.owner = req.who
+            t.updated_at = now
+            t.history.append(TaskHistoryEntry(at=now, who=req.who, note=f"claimed (was {old_owner or 'unowned'})"))
+            save_blackboard(blackboard)
+            return t
+    raise HTTPException(status_code=404, detail="task not found")
+
+
+@app.post("/api/blackboard/{task_id}/status", summary="更新状态", response_model=Task)
+async def update_status(task_id: str, req: UpdateStatusRequest):
+    if req.status not in ("todo", "doing", "done", "blocked"):
+        raise HTTPException(status_code=400, detail="invalid status")
+    for t in blackboard:
+        if t.id == task_id:
+            now = datetime.now().isoformat(timespec="seconds")
+            old_status = t.status
+            t.status = req.status
+            t.updated_at = now
+            t.history.append(TaskHistoryEntry(at=now, who=req.who, from_status=old_status, to_status=req.status, note=req.note))
+            save_blackboard(blackboard)
+            return t
+    raise HTTPException(status_code=404, detail="task not found")
 
 class PresenceRequest(BaseModel):
     name: str
