@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets / local config
+.env
+
+# Runtime artifacts (logs, state files)
+/cc_bridge.out
+/cc_bridge.err
+/cc_chatroom_history.log
+/last_message_id
+/probe_calls.log
+
+# Daemon runtime
+/daemon/last_message_id
+/daemon/probe_calls.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
