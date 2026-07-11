@@ -77,6 +77,27 @@ class Message(BaseModel):
     sender: str
     role: str
     content: str
+    # 语音消息支持（云端独有，backport 自 14:50 chatroom review）
+    voice_url: Optional[str] = None
+    duration: Optional[int] = None  # 语音时长（秒）
+
+# 多媒体扩展名 + kind 检测（云端独有，backport 自 14:50 chatroom review）
+ALLOWED_EXTS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
+    ".mov", ".mp4", ".webm",
+    ".mp3", ".m4a", ".wav", ".ogg", ".opus", ".amr", ".aac", ".flac",
+}
+AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".ogg", ".opus", ".amr", ".aac", ".flac"}
+VIDEO_EXTS = {".mov", ".mp4", ".webm"}
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif"}
+
+
+def _detect_kind(ext: str) -> str:
+    if ext in AUDIO_EXTS:
+        return "audio"
+    if ext in VIDEO_EXTS:
+        return "video"
+    return "image"
 
 # 历史记录持久化
 HISTORY_FILE = "history.json"
@@ -97,7 +118,8 @@ MAX_HISTORY = 500
 def save_history():
     try:
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump([msg.dict() for msg in chat_history], f, ensure_ascii=False, indent=2)
+            # pydantic v2: 用 model_dump() 替代已弃用的 dict()
+            json.dump([msg.model_dump() for msg in chat_history], f, ensure_ascii=False, indent=2)
     except Exception as e:
         print(f"保存历史记录失败: {e}", flush=True)
 
