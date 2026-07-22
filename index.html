@@ -2268,6 +2268,8 @@
         }
 
         async function refreshBlackboard() {
+            // 暂停轮询，避免与手动刷新并发写 BB.tasks 造成重复卡片
+            stopBbPolling();
             try {
                 const params = new URLSearchParams();
                 // 刷新 = 拉当前过滤条件下的全量（since_id 由 startBbPolling 单独负责）
@@ -2283,6 +2285,8 @@
                 if (t) params.set('tag', t);
 
                 const tasks = await bbFetch('/api/blackboard?' + params.toString());
+                // refresh 期间 stopBbPolling() 已暂停并发轮询，可安全覆盖
+                // 用 API 返回为基准，保证被后台删掉的任务立刻从 DOM 消失
                 BB.tasks = tasks;
                 if (tasks.length) BB.lastId = tasks[tasks.length - 1].id;
                 renderBlackboard();
@@ -2290,6 +2294,8 @@
                 updateBbBadge();
             } catch (e) {
                 console.error('refreshBlackboard failed:', e);
+            } finally {
+                startBbPolling();
             }
         }
 
@@ -2532,15 +2538,21 @@
         async function deleteTask(taskId) {
             if (!confirm('确定删除？此操作不可撤销。')) return;
             try {
+                // 乐观更新：先本地过滤 + 渲染，让用户感受 0 延迟删除
+                BB.tasks = BB.tasks.filter(t => t.id !== taskId);
+                renderBlackboard();
+                updateBbBadge();
+                closeDetailPanel();
+                // 后台 DELETE + 全量刷新兜底，确保后端状态一致
                 await bbFetch(`/api/blackboard/${taskId}`, {
                     method: 'DELETE',
                     body: JSON.stringify({ who: BB.me }),
                 });
-                closeDetailPanel();
-                BB.lastId = null;
                 await refreshBlackboard();
             } catch (err) {
                 alert('删除失败：' + err.message);
+                // 失败时回滚：刷新重拉
+                await refreshBlackboard();
             }
         }
 
