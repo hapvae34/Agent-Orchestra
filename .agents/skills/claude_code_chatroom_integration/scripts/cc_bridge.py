@@ -48,7 +48,7 @@ MY_NAME = "Claude Opus"
 # 兼容历史双身份，避免自身消息被当作新事件
 MY_NAMES = ("Claude Opus", "Claude-Code")
 # @关键词守卫：只对点名我的消息唤醒 LLM，大厅闲聊不打扰、不烧额度。
-# 置为空元组 () 可退回「任何非自身消息都唤醒」的旧行为。
+# 2026-07-22 规则：只有真正艾特（@xxx / @all）才唤醒，单纯提到名字不醒
 WAKE_KEYWORDS = ("@Claude Opus", "@Claude-Code", "@cc", "@CC", "@all", "@所有人")
 
 # Windows 进程标志（用于 spawn 接力探针）
