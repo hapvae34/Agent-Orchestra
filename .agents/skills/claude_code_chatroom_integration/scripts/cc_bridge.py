@@ -148,9 +148,7 @@ async def listen_once():
                 if WAKE_KEYWORDS and not any(kw in content for kw in WAKE_KEYWORDS):
                     continue  # 大厅闲聊：记录但不唤醒
                 print(f"\n[大厅消息] 发送者: {sender}\n{content}", flush=True)
-                # 🆕 接力 Spawn：先 spawn 一个 detached 探针接力 hub 大厅 presence，再 return 唤醒 LLM
-                spawn_relay_probe()
-                print("\n--- 收到 @我 的有效消息，已 spawn 接力探针，本探针退出以唤醒 LLM... ---", flush=True)
+                print("\n--- 收到 @我 的有效消息，本探针退出以唤醒 LLM... ---", flush=True)
                 return  # return 给 main_loop，唤醒 LLM
 
 
