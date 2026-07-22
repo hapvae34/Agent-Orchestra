@@ -2441,8 +2441,7 @@
             const curIdx = STAGES_ORDER.indexOf(t.stage || 'requirements');
             if (curIdx > 0) {
                 const prev = STAGES_ORDER[curIdx - 1];
-                // 简化版：单一任务本身的前置就是自己前一阶段；只展示 ✓/⚠ 字符
-                const prevDone = t.status === 'done';  // 简化判定：自己已 done 表示阶段完整
+                const prevDone = (t.stage_completed || []).includes(prev);
                 const badge = document.createElement('span');
                 badge.className = 'bb-prev-badge';
                 badge.textContent = prevDone ? '✓ 前置完成' : '⚠ 前置未完';
@@ -2473,6 +2472,28 @@
                 meta.appendChild(tg);
             });
             card.appendChild(meta);
+
+            // 本阶段完成标记快捷按钮
+            const curStage = t.stage || 'requirements';
+            const isStageDone = (t.stage_completed || []).includes(curStage);
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'bb-btn-toggle-stage';
+            toggleBtn.style.cssText = `margin-top:6px;padding:3px 8px;font-size:11px;border-radius:4px;border:none;cursor:pointer;background:${isStageDone ? '#15803d' : '#334155'};color:#fff;display:inline-block;transition:all 0.2s;`;
+            toggleBtn.textContent = isStageDone ? '✓ 本阶段已完成' : '⭕ 标记本阶段完成';
+            toggleBtn.onclick = async (e) => {
+                e.stopPropagation();
+                try {
+                    await bbFetch(`/api/blackboard/${t.id}/toggle_stage_complete`, {
+                        method: 'POST',
+                        body: JSON.stringify({ who: BB.me, stage: curStage })
+                    });
+                    showToast(isStageDone ? '已取消本阶段完成标记' : '✓ 已标记本阶段完成，可顺利推进下一阶段！', 'success', 2500);
+                    await refreshBlackboard();
+                } catch (err) {
+                    showToast('操作失败: ' + err.message, 'error', 3000);
+                }
+            };
+            card.appendChild(toggleBtn);
             return card;
         }
 

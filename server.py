@@ -376,6 +376,7 @@ class Task(BaseModel):
     created_by: Optional[str] = None  # 创建者（永久记录，谁也不能改）
     status: str = "todo"  # todo / doing / done / blocked
     stage: str = "requirements"  # 默认进入需求论证阶段
+    stage_completed: List[str] = []  # 已打勾完成的阶段列表
     priority: str = "P2"  # P0 / P1 / P2 / P3
     deadline: Optional[str] = None  # ISO 8601
     tags: List[str] = []
@@ -427,6 +428,11 @@ class UpdateStatusRequest(BaseModel):
 
 class ClaimRequest(BaseModel):
     who: str
+
+
+class ToggleStageCompleteRequest(BaseModel):
+    who: str
+    stage: Optional[str] = None
 
 
 class EditTaskRequest(BaseModel):
@@ -545,6 +551,27 @@ async def update_status(task_id: str, req: UpdateStatusRequest):
     raise HTTPException(status_code=404, detail="task not found")
 
 
+@app.post("/api/blackboard/{task_id}/toggle_stage_complete", summary="切换指定阶段打勾完成状态", response_model=Task)
+async def toggle_stage_complete(task_id: str, req: ToggleStageCompleteRequest):
+    for t in blackboard:
+        if t.id == task_id:
+            now = datetime.now().isoformat(timespec="seconds")
+            target_stage = req.stage or t.stage or "requirements"
+            completed_set = set(t.stage_completed or [])
+            if target_stage in completed_set:
+                completed_set.remove(target_stage)
+                note = f"取消标记阶段 [{STAGE_LABELS.get(target_stage, target_stage)}] 完成"
+            else:
+                completed_set.add(target_stage)
+                note = f"标记阶段 [{STAGE_LABELS.get(target_stage, target_stage)}] 完成"
+            t.stage_completed = [s for s in STAGES if s in completed_set]
+            t.updated_at = now
+            t.history.append(TaskHistoryEntry(at=now, who=req.who, note=note))
+            save_blackboard(blackboard)
+            return t
+    raise HTTPException(status_code=404, detail="task not found")
+
+
 @app.put("/api/blackboard/{task_id}", summary="编辑任务（仅 created_by 或当前 owner）", response_model=Task)
 async def edit_task(task_id: str, req: EditTaskRequest):
     for t in blackboard:
@@ -570,13 +597,20 @@ async def edit_task(task_id: str, req: EditTaskRequest):
                     changes.append(f"priority: {t.priority} → {req.priority}")
                     t.priority = req.priority
             if req.stage is not None and req.stage != t.stage:
-                # stage 流转：仅做合法值校验，不再拦截依赖（避免死锁 + 满足「不要繁琐」训示）
-                # 注意：原本有「前一阶段 status==done 才能推进」的校验，但存在逻辑死锁：
-                #   新任务 status=todo 无法推进，而 status=done 需先把整任务标完成，反人类。
-                # 现改为静默提示：前端卡片有 ✓/⚠ 前置角标，用户自行判断是否推进。
-                # 2026-07-22 按队长拍板 Option A：彻底移除 Stage 强阻断 409 校验
                 if req.stage not in STAGES:
                     raise HTTPException(status_code=400, detail=f"stage must be one of {STAGES}")
+                new_idx = STAGES.index(req.stage)
+                old_idx = STAGES.index(t.stage) if t.stage in STAGES else -1
+                if new_idx > old_idx:
+                    # 校验：上一个阶段必须被标记完成（创建者 created_by 拥有自由推进特权）
+                    is_creator = (req.who and (req.who == t.created_by or req.who == "人类指挥官"))
+                    prev_stage = STAGES[old_idx] if old_idx >= 0 else None
+                    if not is_creator and prev_stage and prev_stage not in (t.stage_completed or []):
+                        prev_label = STAGE_LABELS.get(prev_stage, prev_stage)
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"请先点击 [✓ 标记本阶段完成] 标记 [{prev_label}] 已就绪，再推进到下一阶段"
+                        )
                 changes.append(f"stage: {t.stage} → {req.stage}")
                 t.stage = req.stage
             if req.deadline is not None and req.deadline != t.deadline:
