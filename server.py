@@ -361,6 +361,7 @@ class Task(BaseModel):
     title: str
     description: Optional[str] = None
     owner: Optional[str] = None
+    created_by: Optional[str] = None  # 创建者（永久记录，谁也不能改）
     status: str = "todo"  # todo / doing / done / blocked
     priority: str = "P2"  # P0 / P1 / P2 / P3
     deadline: Optional[str] = None  # ISO 8601
@@ -398,6 +399,7 @@ class CreateTaskRequest(BaseModel):
     title: str
     description: Optional[str] = None
     owner: Optional[str] = None
+    created_by: Optional[str] = None  # 创建者，从前端身份注入
     priority: str = "P2"
     deadline: Optional[str] = None
     tags: List[str] = []
@@ -413,44 +415,89 @@ class ClaimRequest(BaseModel):
     who: str
 
 
+class EditTaskRequest(BaseModel):
+    who: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    owner: Optional[str] = None
+    priority: Optional[str] = None
+    deadline: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class DeleteRequest(BaseModel):
+    who: str
+
+
 @app.post("/api/blackboard", summary="新建任务", response_model=Task)
 async def create_task(req: CreateTaskRequest):
     if req.priority not in ("P0", "P1", "P2", "P3"):
         raise HTTPException(status_code=400, detail="priority must be P0/P1/P2/P3")
 
     now = datetime.now().isoformat(timespec="seconds")
+    creator = req.created_by or req.owner or "anonymous"
     task = Task(
         id=str(uuid.uuid4()),
         title=req.title,
         description=req.description,
         owner=req.owner,
+        created_by=creator,
         status="todo",
         priority=req.priority,
         deadline=req.deadline,
         tags=req.tags,
         created_at=now,
         updated_at=now,
-        history=[TaskHistoryEntry(at=now, who=req.owner or "anonymous", to_status="todo", note="created")],
+        history=[TaskHistoryEntry(at=now, who=creator, to_status="todo", note="created")],
     )
     blackboard.append(task)
     save_blackboard(blackboard)
     return task
 
 
-@app.get("/api/blackboard", summary="拉取任务列表", response_model=List[Task])
-async def list_tasks(since_id: Optional[str] = None):
-    if not since_id:
-        return blackboard
-    for i, t in enumerate(blackboard):
-        if t.id == since_id:
-            return blackboard[i+1:]
-    return blackboard
+@app.get("/api/blackboard", summary="拉取任务列表（支持过滤）", response_model=List[Task])
+async def list_tasks(
+    since_id: Optional[str] = None,
+    status: Optional[str] = None,  # todo/doing/done/blocked 单选
+    priority: Optional[str] = None,  # P0/P1/P2/P3 单选
+    owner: Optional[str] = None,
+    tag: Optional[str] = None,  # 单标签
+    q: Optional[str] = None,  # title 模糊搜索
+):
+    items = blackboard
+
+    # 增量拉取（since_id 在过滤之前应用，确保分页一致性）
+    if since_id:
+        for i, t in enumerate(items):
+            if t.id == since_id:
+                items = items[i+1:]
+                break
+        else:
+            items = []
+
+    # 过滤（叠加在增量结果之上）
+    if status:
+        items = [t for t in items if t.status == status]
+    if priority:
+        items = [t for t in items if t.priority == priority]
+    if owner:
+        items = [t for t in items if t.owner == owner]
+    if tag:
+        items = [t for t in items if tag in (t.tags or [])]
+    if q:
+        ql = q.lower()
+        items = [t for t in items if ql in (t.title or "").lower() or ql in (t.description or "").lower()]
+
+    return items
 
 
 @app.post("/api/blackboard/{task_id}/claim", summary="抢单（设置 owner）", response_model=Task)
 async def claim_task(task_id: str, req: ClaimRequest):
     for t in blackboard:
         if t.id == task_id:
+            # 权限校验：未 owner 的任务可被任意人抢；已有 owner 的任务仅 owner 可释放或转交
+            if t.owner and t.owner != req.who:
+                raise HTTPException(status_code=403, detail=f"task already owned by {t.owner}; only owner can release/reassign")
             now = datetime.now().isoformat(timespec="seconds")
             old_owner = t.owner
             t.owner = req.who
@@ -461,12 +508,15 @@ async def claim_task(task_id: str, req: ClaimRequest):
     raise HTTPException(status_code=404, detail="task not found")
 
 
-@app.post("/api/blackboard/{task_id}/status", summary="更新状态", response_model=Task)
+@app.post("/api/blackboard/{task_id}/status", summary="更新状态（仅 owner）", response_model=Task)
 async def update_status(task_id: str, req: UpdateStatusRequest):
     if req.status not in ("todo", "doing", "done", "blocked"):
         raise HTTPException(status_code=400, detail="invalid status")
     for t in blackboard:
         if t.id == task_id:
+            # 权限校验：仅 owner 可改状态（无 owner 视为公开）
+            if t.owner and t.owner != req.who:
+                raise HTTPException(status_code=403, detail=f"only owner ({t.owner}) can change status")
             now = datetime.now().isoformat(timespec="seconds")
             old_status = t.status
             t.status = req.status
@@ -474,6 +524,58 @@ async def update_status(task_id: str, req: UpdateStatusRequest):
             t.history.append(TaskHistoryEntry(at=now, who=req.who, from_status=old_status, to_status=req.status, note=req.note))
             save_blackboard(blackboard)
             return t
+    raise HTTPException(status_code=404, detail="task not found")
+
+
+@app.put("/api/blackboard/{task_id}", summary="编辑任务（仅 created_by 或当前 owner）", response_model=Task)
+async def edit_task(task_id: str, req: EditTaskRequest):
+    for t in blackboard:
+        if t.id == task_id:
+            # 权限校验：仅创建者或当前 owner 可编辑
+            if t.created_by != req.who and t.owner != req.who:
+                raise HTTPException(status_code=403, detail=f"only creator ({t.created_by}) or current owner ({t.owner}) can edit")
+            now = datetime.now().isoformat(timespec="seconds")
+            changes = []
+            if req.title is not None and req.title != t.title:
+                changes.append(f"title: {t.title!r} → {req.title!r}")
+                t.title = req.title
+            if req.description is not None and req.description != t.description:
+                changes.append(f"description updated")
+                t.description = req.description
+            if req.owner is not None and req.owner != t.owner:
+                changes.append(f"owner: {t.owner!r} → {req.owner!r}")
+                t.owner = req.owner
+            if req.priority is not None:
+                if req.priority not in ("P0", "P1", "P2", "P3"):
+                    raise HTTPException(status_code=400, detail="priority must be P0/P1/P2/P3")
+                if req.priority != t.priority:
+                    changes.append(f"priority: {t.priority} → {req.priority}")
+                    t.priority = req.priority
+            if req.deadline is not None and req.deadline != t.deadline:
+                changes.append(f"deadline: {t.deadline!r} → {req.deadline!r}")
+                t.deadline = req.deadline
+            if req.tags is not None and req.tags != t.tags:
+                changes.append(f"tags: {t.tags} → {req.tags}")
+                t.tags = req.tags
+            if not changes:
+                return t  # 无变化
+            t.updated_at = now
+            t.history.append(TaskHistoryEntry(at=now, who=req.who, note=f"edited: {'; '.join(changes)}"))
+            save_blackboard(blackboard)
+            return t
+    raise HTTPException(status_code=404, detail="task not found")
+
+
+@app.delete("/api/blackboard/{task_id}", summary="删除任务（仅 created_by）", response_model=dict)
+async def delete_task(task_id: str, req: DeleteRequest):
+    for i, t in enumerate(blackboard):
+        if t.id == task_id:
+            # 权限校验：仅创建者可删除（比 edit 更严，owner 也不能删别人的任务）
+            if t.created_by != req.who:
+                raise HTTPException(status_code=403, detail=f"only creator ({t.created_by}) can delete")
+            blackboard.pop(i)
+            save_blackboard(blackboard)
+            return {"deleted": task_id, "by": req.who}
     raise HTTPException(status_code=404, detail="task not found")
 
 class PresenceRequest(BaseModel):

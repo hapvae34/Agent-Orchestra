@@ -874,12 +874,304 @@
         .login-btn-ghost:hover {
             background: #dcfce7;
         }
+
+        /* ========== 任务黑板样式 ========== */
+        #tab-switcher {
+            display: inline-flex;
+            gap: 4px;
+            margin-left: 20px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: #94a3b8;
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.15s;
+        }
+        .tab-btn:hover { background: #1e293b; color: #e2e8f0; }
+        .tab-btn.active { background: #334155; color: #f8fafc; border-color: #475569; }
+        .tab-badge {
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 8px;
+            margin-left: 4px;
+            font-weight: bold;
+        }
+
+        #blackboard-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        #bb-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            font-weight: 600;
+        }
+        .bb-header-actions { display: flex; gap: 8px; }
+        .bb-btn-primary {
+            background: #3b82f6; color: white; border: none;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+        }
+        .bb-btn-primary:hover { background: #2563eb; }
+        .bb-btn-secondary {
+            background: #475569; color: white; border: none;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+        }
+        .bb-btn-secondary:hover { background: #64748b; }
+        .bb-btn-text {
+            background: transparent; color: #94a3b8; border: none;
+            cursor: pointer; font-size: 12px; text-decoration: underline;
+        }
+        .bb-btn-text:hover { color: #e2e8f0; }
+
+        #bb-filter-bar {
+            display: flex;
+            gap: 8px;
+            padding: 10px 20px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        #bb-filter-bar input, #bb-filter-bar select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #334155;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        #bb-filter-bar input:focus, #bb-filter-bar select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        #bb-filter-summary { color: #94a3b8; font-size: 12px; margin-left: auto; }
+
+        #bb-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            padding: 16px 20px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .bb-column {
+            background: #1e293b;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+        .bb-column-header {
+            padding: 10px 14px;
+            font-weight: 600;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .bb-column-count {
+            background: #475569;
+            color: #f8fafc;
+            font-size: 11px;
+            padding: 1px 7px;
+            border-radius: 10px;
+        }
+        .bb-column-body {
+            padding: 8px;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 60px;
+            transition: background 0.15s;
+        }
+        .bb-column-body.drag-over { background: #334155; }
+
+        .bb-card {
+            background: #0f172a;
+            border-left: 4px solid #64748b;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            cursor: grab;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .bb-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .bb-card:active { cursor: grabbing; }
+        .bb-card.dragging { opacity: 0.4; }
+        .bb-card-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 4px;
+            word-break: break-word;
+        }
+        .bb-card-meta {
+            font-size: 11px;
+            color: #94a3b8;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .bb-card-meta-chip {
+            background: #1e293b;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        /* 优先级配色 */
+        .bb-prio-P0 { border-left-color: #ef4444; }
+        .bb-prio-P0 .bb-prio-badge { background: #ef4444; color: white; }
+        .bb-prio-P1 { border-left-color: #f97316; }
+        .bb-prio-P1 .bb-prio-badge { background: #f97316; color: white; }
+        .bb-prio-P2 { border-left-color: #eab308; }
+        .bb-prio-P2 .bb-prio-badge { background: #eab308; color: black; }
+        .bb-prio-P3 { border-left-color: #6b7280; }
+        .bb-prio-P3 .bb-prio-badge { background: #6b7280; color: white; }
+        .bb-prio-badge {
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .bb-tag {
+            background: #1e3a8a;
+            color: #bfdbfe;
+            font-size: 10px;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
+        /* Modal 通用 */
+        .bb-modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+        .bb-modal-card {
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 10px;
+            padding: 24px;
+            width: 90%;
+            max-width: 540px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .bb-modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+        .bb-form-row { margin-bottom: 14px; }
+        .bb-form-row label {
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .bb-form-row input, .bb-form-row textarea, .bb-form-row select {
+            width: 100%;
+            background: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid #334155;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .bb-form-row input:focus, .bb-form-row textarea:focus, .bb-form-row select:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+        .bb-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .bb-form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        /* 详情侧滑 */
+        .bb-detail-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: flex-end;
+            z-index: 100;
+        }
+        .bb-detail-card {
+            background: #1e293b;
+            color: #e2e8f0;
+            width: 90%;
+            max-width: 480px;
+            height: 100%;
+            overflow-y: auto;
+            padding: 24px;
+            position: relative;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.4);
+        }
+        .bb-detail-close {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+        }
+        .bb-detail-close:hover { color: #f8fafc; }
+        .bb-history-entry {
+            border-left: 2px solid #475569;
+            padding: 6px 12px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .bb-history-entry .at { color: #64748b; font-size: 11px; }
+        .bb-history-entry .who { color: #3b82f6; font-weight: 600; margin-right: 6px; }
+
+        /* 移动端 */
+        @media (max-width: 900px) {
+            #bb-board { grid-template-columns: 1fr; }
+            .bb-form-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 
     <div id="chat-container">
         <div id="chat-header">
             <span>🎻 Agent-Orchestra 协作大厅</span>
+            <div id="tab-switcher">
+                <button class="tab-btn active" data-tab="chatroom" onclick="switchTab('chatroom')">💬 大厅</button>
+                <button class="tab-btn" data-tab="blackboard" onclick="switchTab('blackboard')">📋 任务黑板 <span id="bb-badge" class="tab-badge" style="display:none">0</span></button>
+            </div>
             <span id="status">未连接</span>
         </div>
         <div id="presence-bar">
@@ -899,6 +1191,104 @@
                 <button id="send-btn" onclick="sendMessage()">发送</button>
             </div>
             <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>
+        </div>
+    </div>
+
+    <!-- 任务黑板（默认隐藏，tab 切换显示） -->
+    <div id="blackboard-container" style="display:none">
+        <div id="bb-header">
+            <span>📋 任务黑板</span>
+            <div class="bb-header-actions">
+                <button class="bb-btn-primary" onclick="openCreateTaskModal()">+ 新建任务</button>
+                <button class="bb-btn-secondary" onclick="refreshBlackboard()">↻ 刷新</button>
+            </div>
+        </div>
+        <div id="bb-filter-bar">
+            <input type="search" id="bb-search" placeholder="🔍 搜索标题/描述" oninput="onBbFilterChange()">
+            <select id="bb-filter-status" onchange="onBbFilterChange()">
+                <option value="">所有状态</option>
+                <option value="todo">📌 待办</option>
+                <option value="doing">🔧 进行中</option>
+                <option value="done">✅ 已完成</option>
+                <option value="blocked">⛔ 阻塞</option>
+            </select>
+            <select id="bb-filter-priority" onchange="onBbFilterChange()">
+                <option value="">所有优先级</option>
+                <option value="P0">🔥 P0</option>
+                <option value="P1">⚡ P1</option>
+                <option value="P2">📌 P2</option>
+                <option value="P3">💤 P3</option>
+            </select>
+            <select id="bb-filter-owner" onchange="onBbFilterChange()">
+                <option value="">所有人</option>
+            </select>
+            <input type="text" id="bb-filter-tag" placeholder="🏷 标签" oninput="onBbFilterChange()">
+            <button class="bb-btn-text" onclick="clearBbFilter()">清空过滤</button>
+            <span id="bb-filter-summary"></span>
+        </div>
+        <div id="bb-board">
+            <div class="bb-column" data-status="todo">
+                <div class="bb-column-header">📌 待办 <span class="bb-column-count" id="bb-count-todo">0</span></div>
+                <div class="bb-column-body" id="bb-body-todo" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+            <div class="bb-column" data-status="doing">
+                <div class="bb-column-header">🔧 进行中 <span class="bb-column-count" id="bb-count-doing">0</span></div>
+                <div class="bb-column-body" id="bb-body-doing" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+            <div class="bb-column" data-status="done">
+                <div class="bb-column-header">✅ 已完成 <span class="bb-column-count" id="bb-count-done">0</span></div>
+                <div class="bb-column-body" id="bb-body-done" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+            <div class="bb-column" data-status="blocked">
+                <div class="bb-column-header">⛔ 阻塞 <span class="bb-column-count" id="bb-count-blocked">0</span></div>
+                <div class="bb-column-body" id="bb-body-blocked" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建任务 modal -->
+    <div id="bb-create-modal" class="bb-modal-mask" style="display:none" onclick="if(event.target===this)closeCreateTaskModal()">
+        <div class="bb-modal-card">
+            <div class="bb-modal-title">📋 新建任务</div>
+            <div class="bb-form-row">
+                <label>标题 *</label>
+                <input type="text" id="bb-c-title" placeholder="一句话说清楚要做什么">
+            </div>
+            <div class="bb-form-row">
+                <label>详细描述</label>
+                <textarea id="bb-c-desc" rows="4" placeholder="补充背景/验收标准/依赖等"></textarea>
+            </div>
+            <div class="bb-form-row bb-form-grid">
+                <div>
+                    <label>优先级</label>
+                    <select id="bb-c-priority">
+                        <option value="P0">🔥 P0 紧急</option>
+                        <option value="P1" selected>⚡ P1 高</option>
+                        <option value="P2">📌 P2 中</option>
+                        <option value="P3">💤 P3 低</option>
+                    </select>
+                </div>
+                <div>
+                    <label>截止日期</label>
+                    <input type="datetime-local" id="bb-c-deadline">
+                </div>
+            </div>
+            <div class="bb-form-row">
+                <label>标签（逗号分隔）</label>
+                <input type="text" id="bb-c-tags" placeholder="例如：backend, refactor">
+            </div>
+            <div class="bb-form-actions">
+                <button class="bb-btn-secondary" onclick="closeCreateTaskModal()">取消</button>
+                <button class="bb-btn-primary" onclick="submitCreateTask()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务详情侧滑面板 -->
+    <div id="bb-detail-panel" class="bb-detail-mask" style="display:none" onclick="if(event.target===this)closeDetailPanel()">
+        <div class="bb-detail-card">
+            <button class="bb-detail-close" onclick="closeDetailPanel()">✕</button>
+            <div id="bb-detail-content"></div>
         </div>
     </div>
 
@@ -1232,10 +1622,28 @@
                 btn.onclick = () => {
                     const code = pre.querySelector('code');
                     if (code) {
-                        navigator.clipboard.writeText(code.innerText).then(() => {
+                        const text = code.innerText;
+                        const successCb = () => {
                             btn.innerHTML = '✅';
                             setTimeout(() => { btn.innerHTML = '📋'; }, 2000);
-                        });
+                        };
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(successCb).catch(e => console.error("Copy failed", e));
+                        } else {
+                            const textarea = document.createElement('textarea');
+                            textarea.value = text;
+                            textarea.style.position = 'fixed';
+                            textarea.style.opacity = '0';
+                            document.body.appendChild(textarea);
+                            textarea.select();
+                            try {
+                                document.execCommand('copy');
+                                successCb();
+                            } catch (err) {
+                                console.error('Fallback copy failed', err);
+                            }
+                            document.body.removeChild(textarea);
+                        }
                     }
                 };
                 pre.appendChild(btn);
@@ -1819,6 +2227,355 @@
                 });
             }
         });
+
+        // ========== 任务黑板（Blackboard）前端逻辑 ==========
+        const BB = {
+            tasks: [],
+            lastId: null,           // 用于增量拉取
+            pollTimer: null,
+            currentDetail: null,    // 当前打开详情的 task
+            // 当前用户身份（从 chatroom 已有身份取，简单复用）
+            get me() {
+                return (window.currentUsername || window.userName || localStorage.getItem('bb-username') || 'anonymous');
+            },
+        };
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+            document.getElementById('chat-container').style.display = tab === 'chatroom' ? 'flex' : 'none';
+            document.getElementById('blackboard-container').style.display = tab === 'blackboard' ? 'flex' : 'none';
+            if (tab === 'blackboard') {
+                refreshBlackboard();
+                startBbPolling();
+            } else {
+                stopBbPolling();
+            }
+        }
+
+        function bbFetch(path, options = {}) {
+            const baseUrl = window.baseUrl || '';
+            return fetch(baseUrl + path, {
+                headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+                ...options,
+            }).then(async r => {
+                if (!r.ok) {
+                    const body = await r.text();
+                    throw new Error(`HTTP ${r.status}: ${body}`);
+                }
+                return r.json();
+            });
+        }
+
+        async function refreshBlackboard() {
+            try {
+                const params = new URLSearchParams();
+                if (BB.lastId) params.set('since_id', BB.lastId);
+                const q = document.getElementById('bb-search').value.trim();
+                const s = document.getElementById('bb-filter-status').value;
+                const p = document.getElementById('bb-filter-priority').value;
+                const o = document.getElementById('bb-filter-owner').value;
+                const t = document.getElementById('bb-filter-tag').value.trim();
+                if (q) params.set('q', q);
+                if (s) params.set('status', s);
+                if (p) params.set('priority', p);
+                if (o) params.set('owner', o);
+                if (t) params.set('tag', t);
+
+                const tasks = await bbFetch('/api/blackboard?' + params.toString());
+                BB.tasks = tasks;
+                if (tasks.length) BB.lastId = tasks[tasks.length - 1].id;
+                renderBlackboard();
+                renderBbOwnerFilter();
+                updateBbBadge();
+            } catch (e) {
+                console.error('refreshBlackboard failed:', e);
+            }
+        }
+
+        function renderBlackboard() {
+            const cols = ['todo', 'doing', 'done', 'blocked'];
+            cols.forEach(s => {
+                const body = document.getElementById('bb-body-' + s);
+                body.innerHTML = '';
+            });
+            const counts = { todo: 0, doing: 0, done: 0, blocked: 0 };
+            BB.tasks.forEach(t => {
+                counts[t.status] = (counts[t.status] || 0) + 1;
+                const body = document.getElementById('bb-body-' + t.status);
+                if (body) body.appendChild(makeBbCard(t));
+            });
+            cols.forEach(s => {
+                document.getElementById('bb-count-' + s).textContent = counts[s] || 0;
+            });
+            const total = BB.tasks.length;
+            const filtered = BB.tasks.length;
+            document.getElementById('bb-filter-summary').textContent =
+                filtered === total ? `共 ${total} 条` : `${filtered} / ${total} 条`;
+        }
+
+        function makeBbCard(t) {
+            const card = document.createElement('div');
+            card.className = `bb-card bb-prio-${t.priority}`;
+            card.draggable = true;
+            card.dataset.id = t.id;
+            card.ondragstart = (e) => {
+                e.dataTransfer.setData('text/plain', t.id);
+                card.classList.add('dragging');
+            };
+            card.ondragend = () => card.classList.remove('dragging');
+            card.onclick = () => openDetailPanel(t.id);
+
+            const title = document.createElement('div');
+            title.className = 'bb-card-title';
+            title.textContent = t.title;
+            card.appendChild(title);
+
+            if (t.deadline || t.owner || (t.tags && t.tags.length)) {
+                const meta = document.createElement('div');
+                meta.className = 'bb-card-meta';
+                const prio = document.createElement('span');
+                prio.className = 'bb-prio-badge';
+                prio.textContent = t.priority;
+                meta.appendChild(prio);
+                if (t.owner) {
+                    const o = document.createElement('span');
+                    o.className = 'bb-card-meta-chip';
+                    o.textContent = '👤 ' + t.owner;
+                    meta.appendChild(o);
+                }
+                if (t.deadline) {
+                    const d = document.createElement('span');
+                    d.className = 'bb-card-meta-chip';
+                    const dt = new Date(t.deadline);
+                    d.textContent = '⏰ ' + (isNaN(dt) ? t.deadline : dt.toLocaleDateString());
+                    meta.appendChild(d);
+                }
+                (t.tags || []).forEach(tag => {
+                    const tg = document.createElement('span');
+                    tg.className = 'bb-tag';
+                    tg.textContent = '#' + tag;
+                    meta.appendChild(tg);
+                });
+                card.appendChild(meta);
+            }
+            return card;
+        }
+
+        function renderBbOwnerFilter() {
+            const sel = document.getElementById('bb-filter-owner');
+            const current = sel.value;
+            const owners = new Set(BB.tasks.map(t => t.owner).filter(Boolean));
+            sel.innerHTML = '<option value="">所有人</option>';
+            [...owners].sort().forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o;
+                opt.textContent = o;
+                if (o === current) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+
+        function updateBbBadge() {
+            const badge = document.getElementById('bb-badge');
+            const open = BB.tasks.filter(t => t.status !== 'done').length;
+            if (open > 0) {
+                badge.style.display = 'inline';
+                badge.textContent = open;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        let bbFilterDebounce = null;
+        function onBbFilterChange() {
+            clearTimeout(bbFilterDebounce);
+            bbFilterDebounce = setTimeout(refreshBlackboard, 250);
+        }
+        function clearBbFilter() {
+            document.getElementById('bb-search').value = '';
+            document.getElementById('bb-filter-status').value = '';
+            document.getElementById('bb-filter-priority').value = '';
+            document.getElementById('bb-filter-owner').value = '';
+            document.getElementById('bb-filter-tag').value = '';
+            refreshBlackboard();
+        }
+
+        // 拖拽
+        function onBbDragOver(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+        document.addEventListener('dragleave', (e) => {
+            if (e.target.classList && e.target.classList.contains('bb-column-body')) {
+                e.target.classList.remove('drag-over');
+            }
+        });
+        async function onBbDrop(e) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            const taskId = e.dataTransfer.getData('text/plain');
+            const newStatus = e.currentTarget.dataset.status ||
+                e.currentTarget.closest('.bb-column')?.dataset.status;
+            if (!taskId || !newStatus) return;
+            const task = BB.tasks.find(t => t.id === taskId);
+            if (!task || task.status === newStatus) return;
+            try {
+                await bbFetch(`/api/blackboard/${taskId}/status`, {
+                    method: 'POST',
+                    body: JSON.stringify({ status: newStatus, who: BB.me, note: 'via drag' }),
+                });
+                await refreshBlackboard();
+                if (BB.currentDetail === taskId) openDetailPanel(taskId);
+            } catch (err) {
+                alert('改状态失败：' + err.message);
+            }
+        }
+
+        // 新建任务 modal
+        function openCreateTaskModal() {
+            document.getElementById('bb-create-modal').style.display = 'flex';
+            document.getElementById('bb-c-title').value = '';
+            document.getElementById('bb-c-desc').value = '';
+            document.getElementById('bb-c-priority').value = 'P2';
+            document.getElementById('bb-c-deadline').value = '';
+            document.getElementById('bb-c-tags').value = '';
+            setTimeout(() => document.getElementById('bb-c-title').focus(), 100);
+        }
+        function closeCreateTaskModal() {
+            document.getElementById('bb-create-modal').style.display = 'none';
+        }
+        async function submitCreateTask() {
+            const title = document.getElementById('bb-c-title').value.trim();
+            if (!title) { alert('请填标题'); return; }
+            const desc = document.getElementById('bb-c-desc').value.trim();
+            const prio = document.getElementById('bb-c-priority').value;
+            const dl = document.getElementById('bb-c-deadline').value;
+            const tags = document.getElementById('bb-c-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+            try {
+                await bbFetch('/api/blackboard', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title, description: desc || null, priority: prio,
+                        deadline: dl ? new Date(dl).toISOString() : null,
+                        tags, created_by: BB.me,
+                    }),
+                });
+                closeCreateTaskModal();
+                BB.lastId = null;  // 强制全量刷新
+                await refreshBlackboard();
+            } catch (err) {
+                alert('创建失败：' + err.message);
+            }
+        }
+
+        // 详情侧滑
+        async function openDetailPanel(taskId) {
+            BB.currentDetail = taskId;
+            const task = BB.tasks.find(t => t.id === taskId);
+            if (!task) return;
+            const me = BB.me;
+            const canEdit = task.created_by === me || task.owner === me;
+            const canDelete = task.created_by === me;
+
+            const html = `
+                <h2 style="margin-top:0">${escapeHtml(task.title)}</h2>
+                <div style="margin: 8px 0;">
+                    <span class="bb-prio-badge bb-prio-${task.priority}">${task.priority}</span>
+                    <span class="bb-card-meta-chip">状态: ${task.status}</span>
+                    ${task.owner ? `<span class="bb-card-meta-chip">👤 ${escapeHtml(task.owner)}</span>` : '<span class="bb-card-meta-chip">👤 未认领</span>'}
+                    ${task.deadline ? `<span class="bb-card-meta-chip">⏰ ${escapeHtml(new Date(task.deadline).toLocaleString())}</span>` : ''}
+                </div>
+                ${task.description ? `<div style="background:#0f172a;padding:12px;border-radius:6px;margin:12px 0;white-space:pre-wrap;">${escapeHtml(task.description)}</div>` : ''}
+                ${task.tags && task.tags.length ? `<div style="margin: 8px 0;">${task.tags.map(t => `<span class="bb-tag">#${escapeHtml(t)}</span>`).join(' ')}</div>` : ''}
+                <div style="margin: 16px 0;">
+                    ${!task.owner || task.owner === me ?
+                        `<button class="bb-btn-primary" onclick="claimTask('${task.id}')">${task.owner === me ? '🔄 我已认领' : '✋ 抢单'}</button>` :
+                        `<button class="bb-btn-secondary" disabled title="已被 ${escapeHtml(task.owner)} 认领">已被 ${escapeHtml(task.owner)} 认领</button>`
+                    }
+                    ${canEdit ? `<button class="bb-btn-secondary" onclick="alert('简化版编辑：当前可通过拖拽改状态；删除重建支持完整字段重设。\\n\\n（如果要内联编辑表单，可后续单独加。）')">✏ 编辑</button>` : ''}
+                    ${canDelete ? `<button class="bb-btn-secondary" onclick="deleteTask('${task.id}')" style="background:#dc2626">🗑 删除</button>` : ''}
+                </div>
+                <h3 style="margin-top:20px;border-top:1px solid #334155;padding-top:12px;">📜 历史</h3>
+                ${(task.history || []).slice().reverse().map(h => `
+                    <div class="bb-history-entry">
+                        <div class="at">${escapeHtml(h.at)}</div>
+                        <span class="who">${escapeHtml(h.who)}</span>
+                        ${h.from_status && h.to_status ? `状态 <b>${h.from_status}</b> → <b>${h.to_status}</b>` :
+                          h.to_status ? `创建 (${h.to_status})` : ''}
+                        ${h.note ? `<div style="color:#94a3b8;font-size:12px;margin-top:2px;">${escapeHtml(h.note)}</div>` : ''}
+                    </div>
+                `).join('') || '<div style="color:#64748b">无历史</div>'}
+            `;
+            document.getElementById('bb-detail-content').innerHTML = html;
+            document.getElementById('bb-detail-panel').style.display = 'flex';
+        }
+
+        function closeDetailPanel() {
+            document.getElementById('bb-detail-panel').style.display = 'none';
+            BB.currentDetail = null;
+        }
+
+        async function claimTask(taskId) {
+            try {
+                await bbFetch(`/api/blackboard/${taskId}/claim`, {
+                    method: 'POST',
+                    body: JSON.stringify({ who: BB.me }),
+                });
+                await refreshBlackboard();
+                if (BB.currentDetail === taskId) openDetailPanel(taskId);
+            } catch (err) {
+                alert('抢单失败：' + err.message);
+            }
+        }
+
+        async function deleteTask(taskId) {
+            if (!confirm('确定删除？此操作不可撤销。')) return;
+            try {
+                await bbFetch(`/api/blackboard/${taskId}`, {
+                    method: 'DELETE',
+                    body: JSON.stringify({ who: BB.me }),
+                });
+                closeDetailPanel();
+                BB.lastId = null;
+                await refreshBlackboard();
+            } catch (err) {
+                alert('删除失败：' + err.message);
+            }
+        }
+
+        // 实时轮询
+        function startBbPolling() {
+            stopBbPolling();
+            BB.pollTimer = setInterval(async () => {
+                try {
+                    const tasks = await bbFetch('/api/blackboard?since_id=' + (BB.lastId || ''));
+                    if (tasks.length) {
+                        BB.tasks = BB.tasks.concat(tasks);
+                        BB.lastId = tasks[tasks.length - 1].id;
+                        renderBlackboard();
+                        updateBbBadge();
+                    }
+                } catch (e) {
+                    // 静默失败，下轮再试
+                }
+            }, 5000);
+        }
+        function stopBbPolling() {
+            if (BB.pollTimer) { clearInterval(BB.pollTimer); BB.pollTimer = null; }
+        }
+
+        // HTML 转义工具
+        function escapeHtml(s) {
+            if (s == null) return '';
+            return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // 启动时如果 chatroom 已登录，自动刷新一次（让 badge 有数据）
+        setTimeout(() => {
+            if (typeof window.userName !== 'undefined' || localStorage.getItem('bb-username')) {
+                refreshBlackboard();
+            }
+        }, 1000);
 
     </script>
         <!-- Image Modal -->
