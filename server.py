@@ -570,22 +570,13 @@ async def edit_task(task_id: str, req: EditTaskRequest):
                     changes.append(f"priority: {t.priority} → {req.priority}")
                     t.priority = req.priority
             if req.stage is not None and req.stage != t.stage:
-                # stage 隐式依赖校验：进入任何下一阶段都必须「自己前一阶段 status==done」
-                # 注意：6 节点流水线是「单任务内阶段推进」，不是「跨任务依赖」
-                # 所以是「当前任务的前一阶段 status 是否 done」，不是「其他人的任务是否 done」
+                # stage 流转：仅做合法值校验，不再拦截依赖（避免死锁 + 满足「不要繁琐」训示）
+                # 注意：原本有「前一阶段 status==done 才能推进」的校验，但存在逻辑死锁：
+                #   新任务 status=todo 无法推进，而 status=done 需先把整任务标完成，反人类。
+                # 现改为静默提示：前端卡片有 ✓/⚠ 前置角标，用户自行判断是否推进。
+                # 2026-07-22 按队长拍板 Option A：彻底移除 Stage 强阻断 409 校验
                 if req.stage not in STAGES:
                     raise HTTPException(status_code=400, detail=f"stage must be one of {STAGES}")
-                new_idx = STAGES.index(req.stage)
-                old_idx = STAGES.index(t.stage) if t.stage in STAGES else -1
-                if new_idx > old_idx:
-                    # 推进（含单步 + 跳跃）：必须自己前一阶段 status=done
-                    prev_stage = STAGES[old_idx] if old_idx >= 0 else None
-                    if prev_stage is not None and t.status != "done":
-                        raise HTTPException(
-                            status_code=409,
-                            detail=f"前置阶段 [{prev_stage}] 状态非 done（当前 status={t.status}），无法推进到 [{req.stage}]",
-                        )
-                # 后退（new_idx < old_idx）允许：用户回滚修订无需依赖校验
                 changes.append(f"stage: {t.stage} → {req.stage}")
                 t.stage = req.stage
             if req.deadline is not None and req.deadline != t.deadline:
