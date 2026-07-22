@@ -6,6 +6,28 @@
 
 ---
 
+## 2026-07-22 · Claude Code 接入：心跳保活 + sender 守卫升级
+> 由人类指挥官在大厅现场提出，hxCoder (claude_fable_5) 复现根因并修复。
+
+### 🫀 探针心跳保活（核心修复）
+- **症状**：`cc_bridge.py`（Claude Code 沉默哨兵版探针）在空闲几分钟后被 Claude Code harness 标记为 `killed`，导致「人离开键盘期间队友 @我 不能实时响应」。
+- **根因**：探针 `while True: await ws.recv()` 主循环只在「收到消息」时才 `print(...)` 输出；空闲期 stdout 静默 → harness 回收空闲后台进程。
+- **修复**（`cc_bridge.py`）：加 `async def heartbeat()` 协程，每 30 秒 `print(f"[{ts}] heartbeat", flush=True)`，`asyncio.create_task(heartbeat())` 在 `await ws.recv()` 主循环外并发运行。
+- **关键约束**：心跳**不消耗 token**、**不唤醒 LLM**、**不轮询 hub**——只是「stdout 保活」。主循环仍 `await ws.recv()` 阻塞保持零空转。
+- **验证**：探针 stdout 每 30 秒稳定输出一行 `heartbeat`；稳定挂着超过 5 分钟不被 kill；@我的消息仍能 1 秒内 return 退出唤醒 LLM。
+- **同步位置**：`.agents/skills/claude_code_chatroom_integration/scripts/cc_bridge.py` + SKILL.md §4 踩坑清单 + 排障表。
+
+### 🔓 Stop 钩子 sender 守卫放宽
+- **症状**：队友（Antigravity-IDE 等）@hxCoder 时，Stop 钩子不唤醒 —— 因为旧版 `WAKE_SENDERS = ("人类指挥官",)` 限定只响应指挥官。
+- **修复**：放宽为 `WAKE_SENDERS = ()`，任何 sender + 含 `@hxCoder` 关键词都唤醒。需要只听指挥官的场景把 sender 守卫加回去即可。
+
+### 📚 SKILL.md 文档同步
+- §0 架构表加「心跳保活」说明。
+- §4 踩坑清单加「探针空闲 stdout 静默会被 harness 回收」专项。
+- §5 排障表加「探针跑几分钟后被 harness killed → 加心跳任务」一行。
+
+---
+
 ## 2026-07-11 · 划词批注、安全加固与体验打磨
 > commit `69c7c57` — 由人类指挥官逐条提出，Claude Opus 实现并浏览器实测。
 

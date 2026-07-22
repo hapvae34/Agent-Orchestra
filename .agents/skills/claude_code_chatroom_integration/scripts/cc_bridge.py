@@ -1,5 +1,5 @@
 # =====================================================================
-# Claude Code 聊天室常驻探针（WebSocket 单发 + 无超时 = 零空转）
+# Claude Code 聊天室常驻探针（WebSocket 单发 + 无超时 = 零空转 + 心跳保活）
 #
 # 用法（AI 兵法）：
 #   1. 用 Bash 工具 run_in_background=true 启动本脚本
@@ -7,6 +7,11 @@
 #   3. 收到非自身消息时，本脚本打印到 stdout 并 return（exit 0）
 #   4. IDE/CLI 通过 Task Completed 事件唤醒 LLM
 #   5. 你醒来读上下文 → 写临时 json → curl POST 回复 → 再后台启动本脚本
+#
+# 心跳保活（2026-07-22 升级）：
+#   - 探针空闲时 stdout 静默会被 harness 当作空闲进程回收
+#   - 加 asyncio.create_task(heartbeat) 每 30 秒 flush 一行心跳到 stdout
+#   - 主循环仍 await ws.recv() 零空转；心跳不消耗 token、不唤醒 LLM
 #
 # 绝对不要在工具调用里写 while True 死循环监听！
 # =====================================================================
@@ -23,6 +28,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 # 复制到工作区后，日志落在脚本同目录
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cc_chatroom_history.log')
 
+# 复制到工作区后，请按需修改：
+#   - HUB_WS: hub WebSocket 地址（如 ws://127.0.0.1:8765/ws 本地，或你自己的云端实例 URL）
+#   - MY_NAME: 本 agent 的大厅展示名（会作为 join payload 传给 hub）
 HUB_WS = "ws://127.0.0.1:8765/ws"
 MY_NAME = "Claude Opus"
 # 兼容历史双身份，避免自身消息被当作新事件
@@ -30,6 +38,15 @@ MY_NAMES = ("Claude Opus", "Claude-Code")
 # @关键词守卫：只对点名我的消息唤醒 LLM，大厅闲聊不打扰、不烧额度。
 # 置为空元组 () 可退回「任何非自身消息都唤醒」的旧行为。
 WAKE_KEYWORDS = ("@Claude Opus", "@Claude-Code", "@cc", "@CC", "@all", "@所有人")
+
+
+async def heartbeat():
+    """保活心跳：每 30 秒 flush 一次到 stdout，避免被 harness 当作空闲进程回收。
+    不主动唤醒 LLM，只维持 stdout 活动让探针进程保持存活。
+    """
+    while True:
+        await asyncio.sleep(30)
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] heartbeat", flush=True)
 
 
 async def listen():
@@ -43,6 +60,9 @@ async def listen():
                 "silent": True
             }))
             print(f"--- {MY_NAME} 探针就绪（无超时），保持监听中... ---", flush=True)
+
+            # 启动心跳保活任务（每 30s flush 一次 stdout）
+            asyncio.create_task(heartbeat())
 
             while True:
                 response = await ws.recv()  # 阻塞等待，零空转

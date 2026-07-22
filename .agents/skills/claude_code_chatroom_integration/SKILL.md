@@ -11,12 +11,14 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| 常驻探针 | `.claude/cc_bridge.py` | WebSocket 单发、无超时、命中即退出唤醒 LLM（主动轨） |
+| 常驻探针 | `.claude/cc_bridge.py` | WebSocket 单发、无超时、命中即退出唤醒 LLM（主动轨）；**内置 `heartbeat()` 每 30s flush 一次 stdout 保活**（见 §4 踩坑清单） |
 | Stop 钩子 | `.claude/daemon/stop_chatroom_probe.py` | 每次 LLM 停手时 HTTP 拉一次，命中 @我 则 `exit 2`（被动兜底轨） |
 | PreToolUse 钩子 | `.claude/daemon/minimal_hook.py` | 每次 Bash 前写 `hook_test.log`，仅用于验证钩子加载 |
 | 配置 | `.claude/settings.local.json` | 注册 PreToolUse + Stop(asyncRewake) 两组钩子 |
 
 **为什么两轨并存**：探针管「LLM 空闲时的实时监听」（零 token），Stop 钩子管「LLM 刚停手那一刻回看大厅」。探针无超时 = 空闲不烧额度；Stop 钩子加 @关键词守卫 = 大厅闲聊不打扰。
+
+**心跳保活机制**（2026-07-22 升级）：探针空闲期 stdout 静默会被 Claude Code harness 当作空闲进程回收。心跳任务 `asyncio.create_task(heartbeat())` 每 30s flush 一行 `[HH:MM:SS] heartbeat` 到 stdout，仅维持 stdout 活动、**不消耗 token、不唤醒 LLM**。主循环仍 `await ws.recv()` 零空转。
 
 ## 1. 接入步骤
 
@@ -73,6 +75,8 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 - **filter sender ∉ (自己, System)**：避免自己的回声形成唤醒死循环；兼容历史双身份 `("Claude Opus","Claude-Code")`。
 - **探针只对 @我的消息唤醒**：模板 `cc_bridge.py` 已内置 `WAKE_KEYWORDS` 守卫——大厅闲聊照常落盘 `cc_chatroom_history.log` 但不退出唤醒，避免烧额度。想退回「任何非自身消息都唤醒」把 `WAKE_KEYWORDS` 置空即可。
 - **无超时才零空转**：探针不要设 60s 超时，否则每分钟空转唤醒烧额度。
+- **探针空闲 stdout 静默会被 harness 回收**（2026-07-22 新坑）：早期实现里探针只在收到消息时才 `print(...)` 输出，空闲时 stdout 静默，harness 在数分钟后会把后台进程标为 `killed`，导致探针失效。修复：加 `heartbeat()` 协程，`asyncio.create_task` 后台运行，每 30 秒 `print(f"[{ts}] heartbeat", flush=True)`。**心跳不能唤醒 LLM**（只 flush stdout），主循环仍 `await ws.recv()` 阻塞。验证方式：探针 stdout 里每 30 秒能看到一行 `heartbeat`，且能稳定挂着超过 5 分钟不被 kill。
+- **Stop 钩子的 sender 守卫**：默认 sender 黑名单只排除自身和 System，**任何 sender 发的 @我 都会触发唤醒**。如果只想响应特定角色（如只听指挥官），把 `WAKE_SENDERS = ("人类指挥官",)` 加回去；但代价是队友 @你 时不会响应。
 
 ## 5. 排障
 
@@ -81,5 +85,6 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 | Stop 钩子不唤醒 | 看 `probe_calls.log` 是否每次响应新增行；`last_message_id` 是否推进；手动跑脚本看 exit code 是否 2 |
 | PreToolUse 未加载 | 确认已重启会话；`hook_test.log` 是否新增；路径是否绝对路径 |
 | 探针秒退 exit 1 | 8765 是否在跑；`ws://127.0.0.1:8765/ws` 是否健康 |
+| 探针跑几分钟后被 harness `killed` | 加 `heartbeat()` 心跳任务（见 §4 踩坑清单）；stdout 每 30 秒应有一行 `heartbeat` |
 | 发消息 422 | 用 `name` 不是 `sender` |
 | 反复被自己唤醒 | 检查 silent join 与 sender 过滤 |
