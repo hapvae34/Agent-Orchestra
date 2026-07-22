@@ -106,11 +106,13 @@ MAX_BACKOFF = 60      # 最大重试间隔（秒）
 async def main_loop():
     """探针主循环：指数退避重连。
     收到 @我 消息时 listen_once() 正常 return → main_loop return → 唤醒 LLM；
-    连接异常时退避 N 秒后重试，确保 hub 重启期间探针不轻易掉线。"""
+    连接异常时退避 N 秒后重试，确保 hub 重启期间探针不轻易掉线。
+    修复：listen_once() 成功调用后也重置 backoff，确保「断线→重连→稳定→再断线」从 1s 起步。"""
     backoff = INITIAL_BACKOFF
     while True:
         try:
             await listen_once()
+            backoff = INITIAL_BACKOFF  # 成功后重置（即便后续 return 也安全）
             return  # 正常收到消息，唤醒 LLM
         except RETRYABLE_EXCEPTIONS as e:
             print(f"探针连接异常: {type(e).__name__}: {e}，{backoff}秒后重试...", flush=True)

@@ -474,6 +474,7 @@ async def create_task(req: CreateTaskRequest):
 async def list_tasks(
     since_id: Optional[str] = None,
     status: Optional[str] = None,  # todo/doing/done/blocked 单选
+    stage: Optional[str] = None,    # 6 节点流水线单选
     priority: Optional[str] = None,  # P0/P1/P2/P3 单选
     owner: Optional[str] = None,
     tag: Optional[str] = None,  # 单标签
@@ -493,6 +494,8 @@ async def list_tasks(
     # 过滤（叠加在增量结果之上）
     if status:
         items = [t for t in items if t.status == status]
+    if stage:
+        items = [t for t in items if t.stage == stage]
     if priority:
         items = [t for t in items if t.priority == priority]
     if owner:
@@ -567,21 +570,20 @@ async def edit_task(task_id: str, req: EditTaskRequest):
                     changes.append(f"priority: {t.priority} → {req.priority}")
                     t.priority = req.priority
             if req.stage is not None and req.stage != t.stage:
-                # stage 隐式依赖校验：进入新 stage 必须前一 stage 已 done
+                # stage 隐式依赖校验：进入任何下一阶段都必须「自己前一阶段 status==done」
+                # 注意：6 节点流水线是「单任务内阶段推进」，不是「跨任务依赖」
+                # 所以是「当前任务的前一阶段 status 是否 done」，不是「其他人的任务是否 done」
                 if req.stage not in STAGES:
                     raise HTTPException(status_code=400, detail=f"stage must be one of {STAGES}")
                 new_idx = STAGES.index(req.stage)
                 old_idx = STAGES.index(t.stage) if t.stage in STAGES else -1
-                if new_idx > old_idx + 1:
-                    # 跨阶段跳跃：检查中间所有 stage 是否都已 done
-                    pending = [STAGES[i] for i in range(old_idx + 1, new_idx)]
-                    pending_tasks = [other for other in blackboard
-                                     if other.stage in pending and other.status != "done"]
-                    if pending_tasks:
-                        names = ", ".join(f"{p.stage}({p.title[:20]})" for p in pending_tasks[:3])
+                if new_idx > old_idx:
+                    # 推进（含单步 + 跳跃）：必须自己前一阶段 status=done
+                    prev_stage = STAGES[old_idx] if old_idx >= 0 else None
+                    if prev_stage is not None and t.status != "done":
                         raise HTTPException(
                             status_code=409,
-                            detail=f"前置阶段未完成: {names}{'...' if len(pending_tasks) > 3 else ''}",
+                            detail=f"前置阶段 [{prev_stage}] 状态非 done（当前 status={t.status}），无法推进到 [{req.stage}]",
                         )
                 # 后退（new_idx < old_idx）允许：用户回滚修订无需依赖校验
                 changes.append(f"stage: {t.stage} → {req.stage}")
