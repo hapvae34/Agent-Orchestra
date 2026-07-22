@@ -77,7 +77,10 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 - **无超时才零空转**：探针不要设 60s 超时，否则每分钟空转唤醒烧额度。
 - **探针空闲 stdout 静默会被 harness 回收**（2026-07-22 新坑）：早期实现里探针只在收到消息时才 `print(...)` 输出，空闲时 stdout 静默，harness 在数分钟后会把后台进程标为 `killed`，导致探针失效。修复：加 `heartbeat()` 协程，`asyncio.create_task` 后台运行，每 30 秒 `print(f"[{ts}] heartbeat", flush=True)`。**心跳不能唤醒 LLM**（只 flush stdout），主循环仍 `await ws.recv()` 阻塞。验证方式：探针 stdout 里每 30 秒能看到一行 `heartbeat`，且能稳定挂着超过 5 分钟不被 kill。
 - **hub 重启期间探针会彻底掉线**（2026-07-22 新坑）：hub 升级时主动发 `1012 service restart` 让 WebSocket 断开，旧版探针直接 `sys.exit(1)` → 进程死亡 → 不会自动重连，人离开键盘期间会一直掉线。修复：把 `listen()` 拆成 `listen_once()`（一次连接）+ `main_loop()`（指数退避外层），捕获 `ConnectionClosed/InvalidMessage/InvalidHandshake/OSError` 等异常后 `asyncio.sleep(backoff)` 然后重连，`backoff` 从 1s → 2s → 4s → ... → 最大 60s。验证方式：手动启停 hub 看探针 stdout，能看到「探针连接异常 ... N 秒后重试...」日志，最终自动重连成功。
-- **LLM 忘记重启探针导致 hub 看不到 hxCoder 在线**（2026-07-22 新坑）：每个回合结束理论上要 `Bash --run_in_background` 重启探针，但 LLM 经常忘，导致你/队友在 hub 大厅艾特 hxCoder 没响应。修复：Stop 钩子尾部自动 `subprocess.Popen` spawn 一个 `cc_bridge.py` 探针（用 `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW` 让子进程脱离当前 bash 进程组，harness 不会杀它）。Stop 钩子先调用 `tasklist` 检查探针是否在跑，没有才 spawn，避免重复。验证方式：跑 `python stop_chatroom_probe.py` 后等几秒，看 `spawn_probe.log` 应有 `spawn 探针 pid=xxx`；再去 hub `/api/presence` 应能看到 hxCoder 在线。
+- **LLM 忘记重启探针导致 hub 看不到 hxCoder 在线**（2026-07-22 新坑）：每个回合结束理论上要 `Bash --run_in_background` 重启探针，但 LLM 经常忘，导致你/队友在 hub 大厅艾特 hxCoder 没响应。修复（双保险）：
+  1. **接力 Spawn**（主保险）：`cc_bridge.py` 收到 @我 消息时，`return` 唤醒 LLM **之前**先 `subprocess.Popen` spawn 一个 detached 子进程接力 hub presence（用 `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW`），保证 LLM 思考期间 hub 大厅 hxCoder 持续在线。
+  2. **Stop 钩子 spawn 兜底**（次保险）：每回合结束 harness 调 Stop 钩子时，检查 cc_bridge.py 是否在跑（用 PowerShell Get-CimInstance 过滤命令行含 cc_bridge.py 的 python.exe，避免被 Antigravity-IDE 的 probe.py 误识别），不在就 spawn。
+  验证方式：跑 `python stop_chatroom_probe.py` 后看 `daemon/spawn_probe.log` 应有 `spawn 探针 pid=xxx`；hub `/api/presence` 应能看到 hxCoder 在线；LLM 处理消息期间触发接力 spawn 看 `cc_bridge_spawn.log`。
 - **Stop 钩子的 sender 守卫**：默认 sender 黑名单只排除自身和 System，**任何 sender 发的 @我 都会触发唤醒**。如果只想响应特定角色（如只听指挥官），把 `WAKE_SENDERS = ("人类指挥官",)` 加回去；但代价是队友 @你 时不会响应。
 
 ## 5. 排障
