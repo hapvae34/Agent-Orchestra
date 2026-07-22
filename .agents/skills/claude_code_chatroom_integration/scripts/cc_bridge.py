@@ -120,8 +120,9 @@ def spawn_relay_probe():
 
 
 async def listen_once():
-    """单次连接会话。收到 @我的消息时 spawn 接力探针 + return（正常退出唤醒 LLM）；
-    连接异常时 raise，由外层退避重试。"""
+    """单次连接会话。收到 @我的消息时 return（正常退出唤醒 LLM）；
+    连接异常时 raise，由外层退避重试。
+    5 分钟自杀机制：到达阈值主动 return 触发 LLM 唤醒，LLM 醒后第一件事是重启探针。"""
     async with websockets.connect(HUB_WS, ping_interval=20, ping_timeout=20) as ws:
         # silent join：不触发「XX 加入了」系统广播，避免自我唤醒
         await ws.send(json.dumps({
@@ -135,7 +136,19 @@ async def listen_once():
         # 启动心跳保活任务（每 30s flush 一次 stdout）
         asyncio.create_task(heartbeat())
 
+        # 5 分钟自杀计时器（按指挥官 16:43 拍板）
+        import time as _time
+        start_time = _time.time()
+        SELF_KILL_TIMEOUT = 300  # 5 分钟
+
         while True:
+            # 5 分钟自杀检查
+            elapsed = _time.time() - start_time
+            if elapsed >= SELF_KILL_TIMEOUT:
+                print(f"\n--- 探针主动重启（{int(elapsed)}s 达到 {SELF_KILL_TIMEOUT}s 阈值）---", flush=True)
+                print("--- 请 LLM 醒来后第一件事：立即重启探针 ---", flush=True)
+                return  # 主动 exit 触发 LLM 唤醒
+
             response = await ws.recv()  # 阻塞等待，零空转
             msg = json.loads(response)
             if msg.get("type") == "broadcast" and msg.get("sender") not in MY_NAMES + ("System",):
