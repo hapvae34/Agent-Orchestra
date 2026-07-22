@@ -356,6 +356,18 @@ class TaskHistoryEntry(BaseModel):
     note: Optional[str] = None
 
 
+# 流程节点（stage）线性流水线：每个阶段自动依赖前一阶段 done 才能进入
+STAGES = ("requirements", "design", "approval", "implementation", "qa", "acceptance")
+STAGE_LABELS = {
+    "requirements": "📋 需求论证",
+    "design": "📐 方案论证",
+    "approval": "✅ 立项评审",
+    "implementation": "🔧 实施",
+    "qa": "🔍 质量检测",
+    "acceptance": "🎯 验收",
+}
+
+
 class Task(BaseModel):
     id: str
     title: str
@@ -363,6 +375,7 @@ class Task(BaseModel):
     owner: Optional[str] = None
     created_by: Optional[str] = None  # 创建者（永久记录，谁也不能改）
     status: str = "todo"  # todo / doing / done / blocked
+    stage: str = "requirements"  # 默认进入需求论证阶段
     priority: str = "P2"  # P0 / P1 / P2 / P3
     deadline: Optional[str] = None  # ISO 8601
     tags: List[str] = []
@@ -400,6 +413,7 @@ class CreateTaskRequest(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
     created_by: Optional[str] = None  # 创建者，从前端身份注入
+    stage: str = "requirements"  # 创建时可选起始阶段（默认 requirements）
     priority: str = "P2"
     deadline: Optional[str] = None
     tags: List[str] = []
@@ -421,6 +435,7 @@ class EditTaskRequest(BaseModel):
     description: Optional[str] = None
     owner: Optional[str] = None
     priority: Optional[str] = None
+    stage: Optional[str] = None  # 拖拽改 stage 时走这里
     deadline: Optional[str] = None
     tags: Optional[List[str]] = None
 
@@ -551,6 +566,26 @@ async def edit_task(task_id: str, req: EditTaskRequest):
                 if req.priority != t.priority:
                     changes.append(f"priority: {t.priority} → {req.priority}")
                     t.priority = req.priority
+            if req.stage is not None and req.stage != t.stage:
+                # stage 隐式依赖校验：进入新 stage 必须前一 stage 已 done
+                if req.stage not in STAGES:
+                    raise HTTPException(status_code=400, detail=f"stage must be one of {STAGES}")
+                new_idx = STAGES.index(req.stage)
+                old_idx = STAGES.index(t.stage) if t.stage in STAGES else -1
+                if new_idx > old_idx + 1:
+                    # 跨阶段跳跃：检查中间所有 stage 是否都已 done
+                    pending = [STAGES[i] for i in range(old_idx + 1, new_idx)]
+                    pending_tasks = [other for other in blackboard
+                                     if other.stage in pending and other.status != "done"]
+                    if pending_tasks:
+                        names = ", ".join(f"{p.stage}({p.title[:20]})" for p in pending_tasks[:3])
+                        raise HTTPException(
+                            status_code=409,
+                            detail=f"前置阶段未完成: {names}{'...' if len(pending_tasks) > 3 else ''}",
+                        )
+                # 后退（new_idx < old_idx）允许：用户回滚修订无需依赖校验
+                changes.append(f"stage: {t.stage} → {req.stage}")
+                t.stage = req.stage
             if req.deadline is not None and req.deadline != t.deadline:
                 changes.append(f"deadline: {t.deadline!r} → {req.deadline!r}")
                 t.deadline = req.deadline

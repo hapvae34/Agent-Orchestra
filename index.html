@@ -1206,12 +1206,14 @@
         </div>
         <div id="bb-filter-bar">
             <input type="search" id="bb-search" placeholder="🔍 搜索标题/描述" oninput="onBbFilterChange()">
-            <select id="bb-filter-status" onchange="onBbFilterChange()">
-                <option value="">所有状态</option>
-                <option value="todo">📌 待办</option>
-                <option value="doing">🔧 进行中</option>
-                <option value="done">✅ 已完成</option>
-                <option value="blocked">⛔ 阻塞</option>
+            <select id="bb-filter-stage" onchange="onBbFilterChange()">
+                <option value="">所有阶段</option>
+                <option value="requirements">📋 需求论证</option>
+                <option value="design">📐 方案论证</option>
+                <option value="approval">✅ 立项评审</option>
+                <option value="implementation">🔧 实施</option>
+                <option value="qa">🔍 质量检测</option>
+                <option value="acceptance">🎯 验收</option>
             </select>
             <select id="bb-filter-priority" onchange="onBbFilterChange()">
                 <option value="">所有优先级</option>
@@ -1228,21 +1230,29 @@
             <span id="bb-filter-summary"></span>
         </div>
         <div id="bb-board">
-            <div class="bb-column" data-status="todo">
-                <div class="bb-column-header">📌 待办 <span class="bb-column-count" id="bb-count-todo">0</span></div>
-                <div class="bb-column-body" id="bb-body-todo" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            <div class="bb-column" data-stage="requirements">
+                <div class="bb-column-header">📋 需求论证 <span class="bb-column-count" id="bb-count-requirements">0</span></div>
+                <div class="bb-column-body" id="bb-body-requirements" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
             </div>
-            <div class="bb-column" data-status="doing">
-                <div class="bb-column-header">🔧 进行中 <span class="bb-column-count" id="bb-count-doing">0</span></div>
-                <div class="bb-column-body" id="bb-body-doing" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            <div class="bb-column" data-stage="design">
+                <div class="bb-column-header">📐 方案论证 <span class="bb-column-count" id="bb-count-design">0</span></div>
+                <div class="bb-column-body" id="bb-body-design" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
             </div>
-            <div class="bb-column" data-status="done">
-                <div class="bb-column-header">✅ 已完成 <span class="bb-column-count" id="bb-count-done">0</span></div>
-                <div class="bb-column-body" id="bb-body-done" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            <div class="bb-column" data-stage="approval">
+                <div class="bb-column-header">✅ 立项评审 <span class="bb-column-count" id="bb-count-approval">0</span></div>
+                <div class="bb-column-body" id="bb-body-approval" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
             </div>
-            <div class="bb-column" data-status="blocked">
-                <div class="bb-column-header">⛔ 阻塞 <span class="bb-column-count" id="bb-count-blocked">0</span></div>
-                <div class="bb-column-body" id="bb-body-blocked" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            <div class="bb-column" data-stage="implementation">
+                <div class="bb-column-header">🔧 实施 <span class="bb-column-count" id="bb-count-implementation">0</span></div>
+                <div class="bb-column-body" id="bb-body-implementation" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+            <div class="bb-column" data-stage="qa">
+                <div class="bb-column-header">🔍 质量检测 <span class="bb-column-count" id="bb-count-qa">0</span></div>
+                <div class="bb-column-body" id="bb-body-qa" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
+            </div>
+            <div class="bb-column" data-stage="acceptance">
+                <div class="bb-column-header">🎯 验收 <span class="bb-column-count" id="bb-count-acceptance">0</span></div>
+                <div class="bb-column-body" id="bb-body-acceptance" ondragover="onBbDragOver(event)" ondrop="onBbDrop(event)"></div>
             </div>
         </div>
     </div>
@@ -2318,7 +2328,7 @@
                 const params = new URLSearchParams();
                 // 刷新 = 拉当前过滤条件下的全量（since_id 由 startBbPolling 单独负责）
                 const q = document.getElementById('bb-search').value.trim();
-                const s = document.getElementById('bb-filter-status').value;
+                const s = document.getElementById('bb-filter-stage').value;
                 const p = document.getElementById('bb-filter-priority').value;
                 const o = document.getElementById('bb-filter-owner').value;
                 const t = document.getElementById('bb-filter-tag').value.trim();
@@ -2344,15 +2354,17 @@
         }
 
         function renderBlackboard() {
-            const cols = ['todo', 'doing', 'done', 'blocked'];
+            const cols = ['requirements', 'design', 'approval', 'implementation', 'qa', 'acceptance'];
             cols.forEach(s => {
                 const body = document.getElementById('bb-body-' + s);
                 body.innerHTML = '';
             });
-            const counts = { todo: 0, doing: 0, done: 0, blocked: 0 };
+            const counts = {};
+            cols.forEach(c => counts[c] = 0);
             BB.tasks.forEach(t => {
-                counts[t.status] = (counts[t.status] || 0) + 1;
-                const body = document.getElementById('bb-body-' + t.status);
+                const stage = t.stage || 'requirements';
+                counts[stage] = (counts[stage] || 0) + 1;
+                const body = document.getElementById('bb-body-' + stage);
                 if (body) body.appendChild(makeBbCard(t));
             });
             cols.forEach(s => {
@@ -2381,34 +2393,46 @@
             title.textContent = t.title;
             card.appendChild(title);
 
-            if (t.deadline || t.owner || (t.tags && t.tags.length)) {
-                const meta = document.createElement('div');
-                meta.className = 'bb-card-meta';
-                const prio = document.createElement('span');
-                prio.className = 'bb-prio-badge';
-                prio.textContent = t.priority;
-                meta.appendChild(prio);
-                if (t.owner) {
-                    const o = document.createElement('span');
-                    o.className = 'bb-card-meta-chip';
-                    o.textContent = '👤 ' + t.owner;
-                    meta.appendChild(o);
-                }
-                if (t.deadline) {
-                    const d = document.createElement('span');
-                    d.className = 'bb-card-meta-chip';
-                    const dt = new Date(t.deadline);
-                    d.textContent = '⏰ ' + (isNaN(dt) ? t.deadline : dt.toLocaleDateString());
-                    meta.appendChild(d);
-                }
-                (t.tags || []).forEach(tag => {
-                    const tg = document.createElement('span');
-                    tg.className = 'bb-tag';
-                    tg.textContent = '#' + tag;
-                    meta.appendChild(tg);
-                });
-                card.appendChild(meta);
+            // meta 区总是显示（前置阶段状态必出）
+            const meta = document.createElement('div');
+            meta.className = 'bb-card-meta';
+            // 前置阶段角标：根据当前 stage 推断前一阶段是否 done
+            const STAGES_ORDER = ['requirements', 'design', 'approval', 'implementation', 'qa', 'acceptance'];
+            const curIdx = STAGES_ORDER.indexOf(t.stage || 'requirements');
+            if (curIdx > 0) {
+                const prev = STAGES_ORDER[curIdx - 1];
+                // 简化版：单一任务本身的前置就是自己前一阶段；只展示 ✓/⚠ 字符
+                const prevDone = t.status === 'done';  // 简化判定：自己已 done 表示阶段完整
+                const badge = document.createElement('span');
+                badge.className = 'bb-prev-badge';
+                badge.textContent = prevDone ? '✓ 前置完成' : '⚠ 前置未完';
+                badge.style.color = prevDone ? '#22c55e' : '#f59e0b';
+                meta.appendChild(badge);
             }
+            const prio = document.createElement('span');
+            prio.className = 'bb-prio-badge';
+            prio.textContent = t.priority;
+            meta.appendChild(prio);
+            if (t.owner) {
+                const o = document.createElement('span');
+                o.className = 'bb-card-meta-chip';
+                o.textContent = '👤 ' + t.owner;
+                meta.appendChild(o);
+            }
+            if (t.deadline) {
+                const d = document.createElement('span');
+                d.className = 'bb-card-meta-chip';
+                const dt = new Date(t.deadline);
+                d.textContent = '⏰ ' + (isNaN(dt) ? t.deadline : dt.toLocaleDateString());
+                meta.appendChild(d);
+            }
+            (t.tags || []).forEach(tag => {
+                const tg = document.createElement('span');
+                tg.className = 'bb-tag';
+                tg.textContent = '#' + tag;
+                meta.appendChild(tg);
+            });
+            card.appendChild(meta);
             return card;
         }
 
@@ -2428,7 +2452,9 @@
 
         function updateBbBadge() {
             const badge = document.getElementById('bb-badge');
-            const open = BB.tasks.filter(t => t.status !== 'done').length;
+            // 未完成验收的任务数（验收阶段之前的都算未完）
+            const ACCEPTANCE = 'acceptance';
+            const open = BB.tasks.filter(t => t.stage !== ACCEPTANCE || t.status !== 'done').length;
             if (open > 0) {
                 badge.style.display = 'inline';
                 badge.textContent = open;
@@ -2444,7 +2470,7 @@
         }
         function clearBbFilter() {
             document.getElementById('bb-search').value = '';
-            document.getElementById('bb-filter-status').value = '';
+            document.getElementById('bb-filter-stage').value = '';
             document.getElementById('bb-filter-priority').value = '';
             document.getElementById('bb-filter-owner').value = '';
             document.getElementById('bb-filter-tag').value = '';
@@ -2465,20 +2491,22 @@
             e.preventDefault();
             e.currentTarget.classList.remove('drag-over');
             const taskId = e.dataTransfer.getData('text/plain');
-            const newStatus = e.currentTarget.dataset.status ||
-                e.currentTarget.closest('.bb-column')?.dataset.status;
-            if (!taskId || !newStatus) return;
+            const newStage = e.currentTarget.dataset.stage ||
+                e.currentTarget.closest('.bb-column')?.dataset.stage;
+            if (!taskId || !newStage) return;
             const task = BB.tasks.find(t => t.id === taskId);
-            if (!task || task.status === newStatus) return;
+            if (!task || task.stage === newStage) return;
             try {
-                await bbFetch(`/api/blackboard/${taskId}/status`, {
-                    method: 'POST',
-                    body: JSON.stringify({ status: newStatus, who: BB.me, note: 'via drag' }),
+                await bbFetch(`/api/blackboard/${taskId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ who: BB.me, stage: newStage }),
                 });
                 await refreshBlackboard();
                 if (BB.currentDetail === taskId) openDetailPanel(taskId);
             } catch (err) {
-                alert('改状态失败：' + err.message);
+                // 后端 409 错误提示前置未完成
+                alert('推进失败：' + err.message);
+                await refreshBlackboard();
             }
         }
 
