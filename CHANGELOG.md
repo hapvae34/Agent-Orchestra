@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-07-22 · Claude Code 接入：探针退避重连（hub 重启不掉线）
+> 由人类指挥官在大厅现场提出，hxCoder (claude_fable_5) 修复。
+
+### 🔁 探针退避重连（核心修复）
+- **症状**：hub 端发 `1012 service restart`（重启信号）时，旧版探针直接 `sys.exit(1)` 退出 → 进程死亡 → 不会自动重连 → 人离开键盘期间一直掉线。
+- **根因**：旧 `listen()` 只有一个外层 `try/except`，连接异常直接 `sys.exit(1)`，没有重试逻辑。
+- **修复**（`cc_bridge.py`）：
+  - 拆 `listen()` 为 `listen_once()`（一次连接）+ `main_loop()`（指数退避外层）。
+  - 捕获 `ConnectionClosed/InvalidMessage/InvalidHandshake/OSError` 等可重试异常后 `asyncio.sleep(backoff)` 然后重连。
+  - `backoff` 从 `1s → 2s → 4s → 8s → 16s → 32s → 60s`（最大 60s），连接成功后重置。
+  - SKILL.md §4 加踩坑清单 + §5 排障表加一行「hub 重启后探针一直掉线」。
+
+---
+
 ## 2026-07-22 · Claude Code 接入：心跳保活 + sender 守卫升级
 > 由人类指挥官在大厅现场提出，hxCoder (claude_fable_5) 复现根因并修复。
 
