@@ -1293,6 +1293,50 @@
         </div>
     </div>
 
+    <!-- 编辑任务 modal -->
+    <div id="bb-edit-modal" class="bb-modal-mask" style="display:none" onclick="if(event.target===this)closeEditTaskModal()">
+        <div class="bb-modal-card">
+            <div class="bb-modal-title">✏ 编辑任务</div>
+            <div class="bb-form-row">
+                <label>标题 *</label>
+                <input type="text" id="bb-e-title">
+            </div>
+            <div class="bb-form-row">
+                <label>详细描述</label>
+                <textarea id="bb-e-desc" rows="4"></textarea>
+            </div>
+            <div class="bb-form-row bb-form-grid">
+                <div>
+                    <label>Owner</label>
+                    <input type="text" id="bb-e-owner" placeholder="留空则未认领">
+                </div>
+                <div>
+                    <label>优先级</label>
+                    <select id="bb-e-priority">
+                        <option value="P0">🔥 P0 紧急</option>
+                        <option value="P1">⚡ P1 高</option>
+                        <option value="P2">📌 P2 中</option>
+                        <option value="P3">💤 P3 低</option>
+                    </select>
+                </div>
+            </div>
+            <div class="bb-form-row bb-form-grid">
+                <div>
+                    <label>截止日期</label>
+                    <input type="datetime-local" id="bb-e-deadline">
+                </div>
+                <div>
+                    <label>标签（逗号分隔）</label>
+                    <input type="text" id="bb-e-tags">
+                </div>
+            </div>
+            <div class="bb-form-actions">
+                <button class="bb-btn-secondary" onclick="closeEditTaskModal()">取消</button>
+                <button class="bb-btn-primary" onclick="submitEditTask()">保存</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 登录弹窗：指挥官(需秘钥) / 测试者(免密钥围观) 双入口 -->
     <div id="login-modal">
         <div class="login-card">
@@ -2499,7 +2543,7 @@
                         `<button class="bb-btn-primary" onclick="claimTask('${task.id}')">${task.owner === me ? '🔄 我已认领' : '✋ 抢单'}</button>` :
                         `<button class="bb-btn-secondary" disabled title="已被 ${escapeHtml(task.owner)} 认领">已被 ${escapeHtml(task.owner)} 认领</button>`
                     }
-                    ${canEdit ? `<button class="bb-btn-secondary" onclick="alert('简化版编辑：当前可通过拖拽改状态；删除重建支持完整字段重设。\\n\\n（如果要内联编辑表单，可后续单独加。）')">✏ 编辑</button>` : ''}
+                    ${canEdit ? `<button class="bb-btn-secondary" onclick="openEditTaskModal('${task.id}')">✏ 编辑</button>` : ''}
                     ${canDelete ? `<button class="bb-btn-secondary" onclick="deleteTask('${task.id}')" style="background:#dc2626">🗑 删除</button>` : ''}
                 </div>
                 <h3 style="margin-top:20px;border-top:1px solid #334155;padding-top:12px;">📜 历史</h3>
@@ -2553,6 +2597,63 @@
                 alert('删除失败：' + err.message);
                 // 失败时回滚：刷新重拉
                 await refreshBlackboard();
+            }
+        }
+
+        // 编辑任务 modal
+        let bbEditingId = null;
+        function openEditTaskModal(taskId) {
+            const t = BB.tasks.find(x => x.id === taskId);
+            if (!t) return;
+            bbEditingId = taskId;
+            document.getElementById('bb-e-title').value = t.title || '';
+            document.getElementById('bb-e-desc').value = t.description || '';
+            document.getElementById('bb-e-owner').value = t.owner || '';
+            document.getElementById('bb-e-priority').value = t.priority || 'P2';
+            document.getElementById('bb-e-deadline').value = t.deadline ? toLocalDatetime(t.deadline) : '';
+            document.getElementById('bb-e-tags').value = (t.tags || []).join(', ');
+            document.getElementById('bb-edit-modal').style.display = 'flex';
+            closeDetailPanel();
+        }
+        function closeEditTaskModal() {
+            document.getElementById('bb-edit-modal').style.display = 'none';
+            bbEditingId = null;
+        }
+        function toLocalDatetime(iso) {
+            // 把 ISO 字符串转成 datetime-local 输入框期望的本地时间格式 (YYYY-MM-DDTHH:MM)
+            try {
+                const d = new Date(iso);
+                if (isNaN(d)) return '';
+                const pad = n => String(n).padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            } catch { return ''; }
+        }
+        async function submitEditTask() {
+            if (!bbEditingId) return;
+            const title = document.getElementById('bb-e-title').value.trim();
+            if (!title) { alert('请填标题'); return; }
+            const desc = document.getElementById('bb-e-desc').value.trim();
+            const owner = document.getElementById('bb-e-owner').value.trim();
+            const prio = document.getElementById('bb-e-priority').value;
+            const dl = document.getElementById('bb-e-deadline').value;
+            const tags = document.getElementById('bb-e-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+            try {
+                await bbFetch(`/api/blackboard/${bbEditingId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        who: BB.me, title,
+                        description: desc || null,
+                        owner: owner || null,
+                        priority: prio,
+                        deadline: dl ? new Date(dl).toISOString() : null,
+                        tags,
+                    }),
+                });
+                closeEditTaskModal();
+                await refreshBlackboard();
+                if (BB.currentDetail) openDetailPanel(BB.currentDetail);
+            } catch (err) {
+                alert('保存失败：' + err.message);
             }
         }
 
