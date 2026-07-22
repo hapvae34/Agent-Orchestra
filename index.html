@@ -875,6 +875,46 @@
             background: #dcfce7;
         }
 
+        /* ========== Toast 提示样式 ========== */
+        #bb-toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .bb-toast {
+            pointer-events: auto;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            padding: 10px 18px;
+            border-radius: 999px;
+            font-size: 13px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            animation: bbToastFadeIn 0.2s ease-out;
+            max-width: 480px;
+            text-align: center;
+        }
+        .bb-toast-error { border-color: rgba(239, 68, 68, 0.5); background: rgba(127, 29, 29, 0.85); }
+        .bb-toast-success { border-color: rgba(34, 197, 94, 0.5); background: rgba(20, 83, 45, 0.85); }
+        .bb-toast-warning { border-color: rgba(245, 158, 11, 0.5); background: rgba(120, 53, 15, 0.85); }
+        .bb-toast.fade-out { animation: bbToastFadeOut 0.2s ease-in forwards; }
+        @keyframes bbToastFadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes bbToastFadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
         /* ========== 任务黑板样式 ========== */
         #tab-switcher {
             display: inline-flex;
@@ -1840,11 +1880,11 @@
                     });
                     renderAttachments();
                 } else {
-                    alert("上传失败: " + result.detail);
+                    showToast("上传失败: " + result.detail, 'error');
                 }
             } catch (err) {
                 console.error(err);
-                alert("上传出错，请检查网络或后端日志。");
+                showToast("上传出错，请检查网络或后端日志。", 'error');
             } finally {
                 inputEl.placeholder = originalPlaceholder;
                 inputEl.disabled = false;
@@ -2504,8 +2544,8 @@
                 await refreshBlackboard();
                 if (BB.currentDetail === taskId) openDetailPanel(taskId);
             } catch (err) {
-                // 后端 409 错误提示前置未完成
-                alert('推进失败：' + err.message);
+                // 后端拒绝提示
+                showToast('推进失败：' + err.message, 'warning');
                 await refreshBlackboard();
             }
         }
@@ -2525,7 +2565,7 @@
         }
         async function submitCreateTask() {
             const title = document.getElementById('bb-c-title').value.trim();
-            if (!title) { alert('请填标题'); return; }
+            if (!title) { showToast('请填标题', 'warning'); return; }
             const desc = document.getElementById('bb-c-desc').value.trim();
             const prio = document.getElementById('bb-c-priority').value;
             const dl = document.getElementById('bb-c-deadline').value;
@@ -2543,7 +2583,7 @@
                 BB.lastId = null;  // 强制全量刷新
                 await refreshBlackboard();
             } catch (err) {
-                alert('创建失败：' + err.message);
+                showToast('创建失败：' + err.message, 'error');
             }
         }
 
@@ -2603,7 +2643,7 @@
                 await refreshBlackboard();
                 if (BB.currentDetail === taskId) openDetailPanel(taskId);
             } catch (err) {
-                alert('抢单失败：' + err.message);
+                showToast('抢单失败：' + err.message, 'error');
             }
         }
 
@@ -2622,7 +2662,7 @@
                 });
                 await refreshBlackboard();
             } catch (err) {
-                alert('删除失败：' + err.message);
+                showToast('删除失败：' + err.message, 'error');
                 // 失败时回滚：刷新重拉
                 await refreshBlackboard();
             }
@@ -2659,7 +2699,7 @@
         async function submitEditTask() {
             if (!bbEditingId) return;
             const title = document.getElementById('bb-e-title').value.trim();
-            if (!title) { alert('请填标题'); return; }
+            if (!title) { showToast('请填标题', 'warning'); return; }
             const desc = document.getElementById('bb-e-desc').value.trim();
             const owner = document.getElementById('bb-e-owner').value.trim();
             const prio = document.getElementById('bb-e-priority').value;
@@ -2681,7 +2721,7 @@
                 await refreshBlackboard();
                 if (BB.currentDetail) openDetailPanel(BB.currentDetail);
             } catch (err) {
-                alert('保存失败：' + err.message);
+                showToast('保存失败：' + err.message, 'error');
             }
         }
 
@@ -2712,6 +2752,21 @@
             return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
+        // Toast 提示（暗黑玻璃拟态，2 秒自动隐去）—— 替换原生 alert
+        // type: 'info' | 'success' | 'warning' | 'error'，默认 'info'
+        function showToast(message, type = 'info', duration = 2000) {
+            const container = document.getElementById('bb-toast-container');
+            if (!container) { console.warn('Toast container missing'); return; }
+            const toast = document.createElement('div');
+            toast.className = 'bb-toast bb-toast-' + type;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 250);
+            }, duration);
+        }
+
         // 启动时如果 chatroom 已登录，自动刷新一次（让 badge 有数据）
         setTimeout(() => {
             if (typeof window.userName !== 'undefined' || localStorage.getItem('bb-username')) {
@@ -2724,6 +2779,9 @@
         <div id="imageModal" class="image-modal">
             <img id="imageModalImg" src="" draggable="false" />
         </div>
+
+        <!-- Toast 提示容器（暗黑玻璃拟态，2 秒自动隐去） -->
+        <div id="bb-toast-container"></div>
     </body>
 
 </html>
