@@ -66,8 +66,38 @@ async def heartbeat():
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] heartbeat", flush=True)
 
 
+def is_existing_probe_alive():
+    """检查当前是否已有 cc_bridge.py 探针在跑（避免重复 spawn 造成进程泄漏）。
+    用 PowerShell Get-CimInstance 查命令行含 cc_bridge.py 的 python.exe 数量。"""
+    try:
+        out = subprocess.check_output(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" "
+             "| Where-Object { $_.CommandLine -like '*cc_bridge.py*' } "
+             "| Measure-Object | Select-Object -ExpandProperty Count"],
+            text=True, timeout=8,
+        ).strip()
+        return int(out) > 0 if out.isdigit() else False
+    except Exception:
+        try:
+            with open(SPAWN_LOG, 'a', encoding='utf-8') as f:
+                ts = datetime.datetime.now().isoformat(timespec='seconds')
+                f.write(f"[{ts}] is_existing_probe_alive powershell 失败，兜底允许 spawn\n")
+        except Exception:
+            pass
+        return False
+
+
 def spawn_relay_probe():
-    """return 前调用：spawn 一个 cc_bridge.py 接力探针（detached），保持 hub 大厅 presence 不掉线。"""
+    """return 前调用：spawn 一个 cc_bridge.py 接力探针（detached），保持 hub 大厅 presence 不掉线。
+    接力探针独立进程组，harness 不会把它当成关联任务回收。
+    失败不抛异常（兜底逻辑不应影响主唤醒流程）。
+    去重：如果当前已有 cc_bridge.py 在跑（接力探针），跳过 spawn 防进程泄漏。"""
+    if is_existing_probe_alive():
+        with open(SPAWN_LOG, 'a', encoding='utf-8') as f:
+            ts = datetime.datetime.now().isoformat(timespec='seconds')
+            f.write(f"[{ts}] 已有探针在跑，跳过 spawn（防进程泄漏）\n")
+        return
     try:
         script = os.path.abspath(__file__)
         log_fh = open(SPAWN_LOG, 'ab')
