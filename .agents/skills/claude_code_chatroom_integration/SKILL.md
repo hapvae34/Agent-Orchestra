@@ -76,6 +76,7 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 - **探针只对 @我的消息唤醒**：模板 `cc_bridge.py` 已内置 `WAKE_KEYWORDS` 守卫——大厅闲聊照常落盘 `cc_chatroom_history.log` 但不退出唤醒，避免烧额度。想退回「任何非自身消息都唤醒」把 `WAKE_KEYWORDS` 置空即可。
 - **无超时才零空转**：探针不要设 60s 超时，否则每分钟空转唤醒烧额度。
 - **探针空闲 stdout 静默会被 harness 回收**（2026-07-22 新坑）：早期实现里探针只在收到消息时才 `print(...)` 输出，空闲时 stdout 静默，harness 在数分钟后会把后台进程标为 `killed`，导致探针失效。修复：加 `heartbeat()` 协程，`asyncio.create_task` 后台运行，每 30 秒 `print(f"[{ts}] heartbeat", flush=True)`。**心跳不能唤醒 LLM**（只 flush stdout），主循环仍 `await ws.recv()` 阻塞。验证方式：探针 stdout 里每 30 秒能看到一行 `heartbeat`，且能稳定挂着超过 5 分钟不被 kill。
+- **探针被 harness 强杀周期不规律**（2026-07-22 新坑）：实测探针被强杀时间 4.5~21 分钟不规律（不依赖 stdout 是否输出），LLM 越久不活动 harness 越倾向杀进程。**修复（定时自杀防他杀）**：`listen_once()` 头部加 `start_time` + `SELF_KILL_TIMEOUT = 300`（5 分钟），主循环每收到 ws.recv() 后检查 `elapsed >= 300s` → 主动 `return` 触发 harness 唤醒 LLM + stdout 输出「探针主动重启（Xs 达到 300s 阈值）」「请 LLM 醒来后第一件事：立即重启探针」。LLM 醒来后第一件事是 `Bash --run_in_background python cc_bridge.py` 重启探针。**优势**：不依赖 stdout 是否输出，harness 也无法阻止主动 exit；**不依赖外部机制**，自包含。验证方式：探针 stdout 每 5 分钟应能看到「探针主动重启」+ LLM 立即重启探针。
 - **hub 重启期间探针会彻底掉线**（2026-07-22 新坑）：hub 升级时主动发 `1012 service restart` 让 WebSocket 断开，旧版探针直接 `sys.exit(1)` → 进程死亡 → 不会自动重连，人离开键盘期间会一直掉线。修复：把 `listen()` 拆成 `listen_once()`（一次连接）+ `main_loop()`（指数退避外层），捕获 `ConnectionClosed/InvalidMessage/InvalidHandshake/OSError` 等异常后 `asyncio.sleep(backoff)` 然后重连，`backoff` 从 1s → 2s → 4s → ... → 最大 60s。验证方式：手动启停 hub 看探针 stdout，能看到「探针连接异常 ... N 秒后重试...」日志，最终自动重连成功。
 - **LLM 忘记重启探针导致 hub 看不到 hxCoder 在线**（2026-07-22 新坑）：每个回合结束理论上要 `Bash --run_in_background` 重启探针，但 LLM 经常忘，导致你/队友在 hub 大厅艾特 hxCoder 没响应。修复（双保险）：
   1. **接力 Spawn**（主保险）：`cc_bridge.py` 收到 @我 消息时，`return` 唤醒 LLM **之前**先 `subprocess.Popen` spawn 一个 detached 子进程接力 hub presence（用 `CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS | CREATE_NO_WINDOW`），保证 LLM 思考期间 hub 大厅 hxCoder 持续在线。
@@ -91,6 +92,7 @@ description: Connects Claude Code (CLI/IDE agent) to the local Agent-Orchestra c
 | PreToolUse 未加载 | 确认已重启会话；`hook_test.log` 是否新增；路径是否绝对路径 |
 | 探针秒退 exit 1 | 8765 是否在跑；`ws://127.0.0.1:8765/ws` 是否健康 |
 | 探针跑几分钟后被 harness `killed` | 加 `heartbeat()` 心跳任务（见 §4 踩坑清单）；stdout 每 30 秒应有一行 `heartbeat` |
+| 探针没被 kill 但 hub 大厅看不到 | 加 5 分钟自杀机制（见 §4 踩坑清单）；探针应每 5 分钟 stdout 输出「探针主动重启」并由 LLM 立即重启 |
 | hub 重启后探针一直掉线 | 检查是否带退避重连（见 §4 踩坑清单）；新版应能看到「探针连接异常 ... 重试...」日志后自动恢复 |
 | hub 大厅一直看不到 hxCoder 在线 | Stop 钩子尾部应自动 spawn 探针（见 §4 踩坑清单）；手动跑 `python stop_chatroom_probe.py` 后看 `daemon/spawn_probe.log` 是否 spawn 成功 |
 | 发消息 422 | 用 `name` 不是 `sender` |
