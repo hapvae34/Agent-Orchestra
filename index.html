@@ -1197,7 +1197,8 @@
     <!-- 任务黑板（默认隐藏，tab 切换显示） -->
     <div id="blackboard-container" style="display:none">
         <div id="bb-header">
-            <span>📋 任务黑板</span>
+            <button class="bb-btn-secondary" onclick="switchTab('chatroom')" title="返回大厅">← 返回大厅</button>
+            <span style="margin-left:12px">📋 任务黑板</span>
             <div class="bb-header-actions">
                 <button class="bb-btn-primary" onclick="openCreateTaskModal()">+ 新建任务</button>
                 <button class="bb-btn-secondary" onclick="refreshBlackboard()">↻ 刷新</button>
@@ -2269,7 +2270,7 @@
         async function refreshBlackboard() {
             try {
                 const params = new URLSearchParams();
-                if (BB.lastId) params.set('since_id', BB.lastId);
+                // 刷新 = 拉当前过滤条件下的全量（since_id 由 startBbPolling 单独负责）
                 const q = document.getElementById('bb-search').value.trim();
                 const s = document.getElementById('bb-filter-status').value;
                 const p = document.getElementById('bb-filter-priority').value;
