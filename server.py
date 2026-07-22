@@ -555,8 +555,12 @@ async def update_status(task_id: str, req: UpdateStatusRequest):
 async def toggle_stage_complete(task_id: str, req: ToggleStageCompleteRequest):
     for t in blackboard:
         if t.id == task_id:
+            # 权限校验：仅创建者、认领人或指挥官可标记阶段完成
+            if t.created_by != req.who and t.owner != req.who and req.who != "人类指挥官":
+                raise HTTPException(status_code=403, detail=f"only creator ({t.created_by}) or owner ({t.owner}) can toggle stage completion")
             now = datetime.now().isoformat(timespec="seconds")
-            target_stage = req.stage or t.stage or "requirements"
+            # 强制限定只能标记任务当前所在的 stage（禁止越权跨 stage 标记）
+            target_stage = t.stage or "requirements"
             completed_set = set(t.stage_completed or [])
             if target_stage in completed_set:
                 completed_set.remove(target_stage)

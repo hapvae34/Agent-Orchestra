@@ -2483,6 +2483,7 @@
             toggleBtn.onclick = async (e) => {
                 e.stopPropagation();
                 try {
+                    stopBbPolling();
                     await bbFetch(`/api/blackboard/${t.id}/toggle_stage_complete`, {
                         method: 'POST',
                         body: JSON.stringify({ who: BB.me, stage: curStage })
@@ -2491,6 +2492,8 @@
                     await refreshBlackboard();
                 } catch (err) {
                     showToast('操作失败: ' + err.message, 'error', 3000);
+                } finally {
+                    startBbPolling();
                 }
             };
             card.appendChild(toggleBtn);
